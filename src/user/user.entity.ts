@@ -44,4 +44,8 @@ export class User {
     default: VerificationStatus.PENDING,
   })
   verificationStatus!: VerificationStatus;
+
+  // ✅ NEW FIELD for refresh tokens
+  @Column({ nullable: true })
+  refreshToken!: string;
 }

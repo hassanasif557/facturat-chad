@@ -10,15 +10,16 @@ import { User } from 'src/user/user.entity';
 @Module({
   imports: [
     UserModule,
+    ConfigModule,
+    TypeOrmModule.forFeature([User]),
+
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('SUPABASE_JWT_SECRET'),
-        signOptions: { expiresIn: '1d' },
+        secret: config.get<string>('JWT_SECRET'),
       }),
     }),
-    TypeOrmModule.forFeature([User]),
   ],
   providers: [AuthService],
   controllers: [AuthController],

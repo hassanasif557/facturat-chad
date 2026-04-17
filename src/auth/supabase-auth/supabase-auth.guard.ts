@@ -17,7 +17,7 @@ export class SupabaseAuthGuard implements CanActivate {
       throw new UnauthorizedException('No Token Provided!');
     }
     const token = authHeader.split(' ')[1];
-    const jwtSecret = this.configService.get<string>('SUPABASE_JWT_SECRET');
+    const jwtSecret = this.configService.get<string>('JWT_SECRET');
     if(!jwtSecret){
       throw new UnauthorizedException('JWT Secrete not found');
     }
