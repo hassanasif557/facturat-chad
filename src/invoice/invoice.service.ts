@@ -52,6 +52,7 @@ export class InvoiceService {
       products: mappedProducts,
       qrCode,
       pdfPath,
+      status: 'pending', // ✅ ADD THIS
       user: { id: user.sub },
     } as any);
 
@@ -147,5 +148,26 @@ export class InvoiceService {
   async delete(id: number) {
     await this.repo.delete(id);
     return { message: 'Deleted' };
+  }
+
+
+  async updateStatus(id: number, status: string, user: any) {
+    const invoice = await this.repo.findOne({
+      where: { id },
+      relations: ['user'],
+    });
+
+    if (!invoice) {
+      throw new NotFoundException('Invoice not found');
+    }
+
+    // ✅ SECURITY: only owner can update status
+    if (invoice.user.id !== user.sub) {
+      throw new NotFoundException('You cannot update this invoice');
+    }
+
+    invoice.status = status as any;
+
+    return this.repo.save(invoice);
   }
 }

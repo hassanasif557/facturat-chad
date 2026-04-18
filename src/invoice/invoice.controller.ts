@@ -18,6 +18,7 @@ import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
+import { UpdateInvoiceStatusDto } from './dto/update-invoice-status.dto';
 
 @Controller('invoices')
 @UseGuards(SupabaseAuthGuard, RolesGuard)
@@ -69,5 +70,17 @@ export class InvoiceController {
   @Roles('admin')
   delete(@Param('id') id: number) {
     return this.service.delete(id);
+  }
+
+
+  // ✅ USER: UPDATE OWN INVOICE STATUS
+  @Put(':id/status')
+  @Roles('user')
+  updateStatus(
+    @Param('id') id: number,
+    @Body() body: UpdateInvoiceStatusDto,
+    @Req() req,
+  ) {
+    return this.service.updateStatus(id, body.status, req.user);
   }
 }

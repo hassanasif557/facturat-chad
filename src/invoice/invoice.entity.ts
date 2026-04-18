@@ -6,6 +6,12 @@ import {
 } from 'typeorm';
 import { User } from 'src/user/user.entity';
 
+export enum InvoiceStatus {
+  PAID = 'paid',
+  UNPAID = 'unpaid',
+  PENDING = 'pending',
+}
+
 @Entity()
 export class Invoice {
   @PrimaryGeneratedColumn()
@@ -28,6 +34,14 @@ export class Invoice {
 
   @Column({ nullable: true })
   pdfPath!: string;
+
+  // ✅ NEW STATUS FIELD
+  @Column({
+    type: 'enum',
+    enum: InvoiceStatus,
+    default: InvoiceStatus.PENDING,
+  })
+  status!: InvoiceStatus;
 
   @ManyToOne(() => User, (user) => user.id)
   user!: User;
