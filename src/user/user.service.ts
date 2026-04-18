@@ -4,7 +4,10 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { User } from './user.entity';
+import { User, VerificationStatus } from './user.entity';
+import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 
 @Injectable()
 export class UserService {
@@ -13,152 +16,104 @@ export class UserService {
     private userRepository: Repository<User>,
   ) {}
 
-  // ✅ CREATE
-  async create(userData: Partial<User>): Promise<User> {
-    const user = this.userRepository.create(userData);
-    const saved = await this.userRepository.save(user);
-
-    saved.password = ""; // 🔐 never return password
-    return saved;
+  // 🔐 Helper
+  private excludePassword(user: User) {
+    const { password, refreshToken, ...safeUser } = user;
+    return safeUser;
   }
 
-  // ✅ ADMIN: GET ALL USERS
+  // ================= ADMIN =================
+
+  async create(dto: CreateUserDto): Promise<User> {
+    const user = this.userRepository.create(dto);
+    const saved = await this.userRepository.save(user);
+    return this.excludePassword(saved) as User;
+  }
+
   async findAll(): Promise<User[]> {
     const users = await this.userRepository.find();
-
-    // 🔐 remove passwords
-    return users.map((u) => {
-       u.password = "";
-      return u;
-    });
+    return users.map((u) => this.excludePassword(u) as User);
   }
 
-  // ✅ ADMIN: GET ONE USER
   async findOne(id: number): Promise<User> {
     const user = await this.userRepository.findOneBy({ id });
 
-    if (!user) {
-      throw new NotFoundException(
-        `User with ID ${id} not found`,
-      );
-    }
+    if (!user) throw new NotFoundException('User not found');
 
-     user.password = "";
-    return user;
+    return this.excludePassword(user) as User;
   }
 
-  // ✅ ADMIN: UPDATE ANY USER
-  async update(
+  async update(id: number, dto: UpdateUserDto): Promise<User> {
+    const user = await this.userRepository.findOneBy({ id });
+
+    if (!user) throw new NotFoundException('User not found');
+
+    Object.assign(user, dto);
+    const saved = await this.userRepository.save(user);
+
+    return this.excludePassword(saved) as User;
+  }
+
+  async delete(id: number) {
+    const result = await this.userRepository.delete(id);
+
+    if (!result.affected) {
+      throw new NotFoundException('User not found');
+    }
+
+    return { message: 'User deleted successfully' };
+  }
+
+  // 🔥 ADMIN: verification control
+  async updateVerificationStatus(
     id: number,
-    updatedData: Partial<User>,
+    status: VerificationStatus,
   ): Promise<User> {
     const user = await this.userRepository.findOneBy({ id });
 
-    if (!user) {
-      throw new NotFoundException(
-        `User with ID ${id} not found`,
-      );
-    }
+    if (!user) throw new NotFoundException('User not found');
 
-    const updated = Object.assign(user, updatedData);
-    const saved = await this.userRepository.save(updated);
+    user.verificationStatus = status;
 
-     saved.password = ""; // 🔐 never return password
-    return saved;
-  }
+    const saved = await this.userRepository.save(user);
 
-  // ✅ ADMIN: DELETE ANY USER
-  async delete(id: number): Promise<{ message: string }> {
-    const result = await this.userRepository.delete(id);
-
-    if (result.affected === 0) {
-      throw new NotFoundException(
-        `User with ID ${id} not found`,
-      );
-    }
-
-    return {
-      message: `User with ID ${id} deleted successfully`,
-    };
+    return this.excludePassword(saved) as User;
   }
 
   // ================= USER SELF =================
 
-  // ✅ GET OWN PROFILE
   async findMe(user): Promise<User> {
     const found = await this.userRepository.findOne({
       where: { id: user.sub },
     });
 
-    if (!found) {
-      throw new NotFoundException('User not found');
-    }
+    if (!found) throw new NotFoundException('User not found');
 
-     found.password = "";
-    return found;
+    return this.excludePassword(found) as User;
   }
 
-  // ✅ UPDATE OWN PROFILE
-  async updateMe(user, data): Promise<User> {
+  async updateMe(user, dto: UpdateProfileDto): Promise<User> {
     const existing = await this.userRepository.findOne({
       where: { id: user.sub },
     });
 
-    if (!existing) {
-      throw new NotFoundException('User not found');
-    }
+    if (!existing) throw new NotFoundException('User not found');
 
-    const updated = Object.assign(existing, data);
-    const saved = await this.userRepository.save(updated);
+    // ✅ ONLY SAFE FIELDS (DTO already restricts this)
+    Object.assign(existing, dto);
 
-    delete saved.password;
-    return saved;
+    const saved = await this.userRepository.save(existing);
+
+    return this.excludePassword(saved) as User;
   }
 
-  // ✅ DELETE OWN ACCOUNT
-  async deleteMe(user): Promise<{ message: string }> {
+  async deleteMe(user) {
     const result = await this.userRepository.delete(user.sub);
 
-    if (result.affected === 0) {
+    if (!result.affected) {
       throw new NotFoundException('User not found');
     }
 
-    return { message: 'Your account has been deleted' };
-  }
-
-  // ================= SEARCH (ADMIN) =================
-
-  async search(filters: {
-    name?: string;
-    email?: string;
-    verificationStatus?: string;
-  }): Promise<User[]> {
-    const query = this.userRepository.createQueryBuilder('user');
-
-    if (filters.name) {
-      query.andWhere('user.name ILIKE :name', {
-        name: `%${filters.name}%`,
-      });
-    }
-
-    if (filters.email) {
-      query.andWhere('user.email ILIKE :email', {
-        email: `%${filters.email}%`,
-      });
-    }
-
-    if (filters.verificationStatus) {
-      query.andWhere(
-        'user.verificationStatus = :status',
-        { status: filters.verificationStatus },
-      );
-    }
-
-    const users = await query.getMany();
-
-    return users.map((u) => {
-    const { password, ...safeUser } = u;
-    return safeUser as User;
-    });
+    return { message: 'Account deleted' };
   }
 }

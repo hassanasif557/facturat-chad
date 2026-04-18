@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Invoice } from './invoice.entity';
@@ -127,8 +127,21 @@ export class InvoiceService {
   }
 
   async update(id: number, body: any) {
-    await this.repo.update(id, body);
-    return this.repo.findOne({ where: { id } });
+    const invoice = await this.repo.findOne({
+      where: { id },
+    });
+
+    if (!invoice) {
+      throw new NotFoundException('Invoice not found');
+    }
+
+    // ✅ Merge new data safely
+    Object.assign(invoice, body);
+
+    // ✅ Save (better than update)
+    const saved = await this.repo.save(invoice);
+
+    return saved;
   }
 
   async delete(id: number) {

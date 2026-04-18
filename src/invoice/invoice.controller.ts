@@ -25,7 +25,7 @@ export class InvoiceController {
   constructor(private service: InvoiceService) {}
 
   // ✅ SINGLE API
-  @Post()
+  @Post('create')
   @Roles('user', 'admin')
   @UseInterceptors(
     FilesInterceptor('files', 10, {
@@ -61,7 +61,7 @@ export class InvoiceController {
 
   @Put(':id')
   @Roles('admin')
-  update(@Param('id') id: number, @Body() body) {
+  update(@Param('id') id: number, @Body() body: any) {
     return this.service.update(id, body);
   }
 
