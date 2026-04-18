@@ -170,4 +170,75 @@ export class InvoiceService {
 
     return this.repo.save(invoice);
   }
+
+
+
+  //Dashboard api
+  async getDashboard(user: any, filter: any) {
+  const query = this.repo
+    .createQueryBuilder('invoice')
+    .where('invoice.userId = :userId', { userId: user.sub });
+
+  // ✅ DATE FILTER
+  if (filter.startDate && filter.endDate) {
+    query.andWhere(
+      'invoice.date BETWEEN :start AND :end',
+      {
+        start: filter.startDate,
+        end: filter.endDate,
+      },
+    );
+  }
+
+  // ========================
+  // 📊 TOTAL INVOICES
+  // ========================
+  const totalInvoices = await query.getCount();
+
+  // ========================
+  // 💰 PAID INVOICES
+  // ========================
+  const paidQuery = query.clone()
+    .andWhere('invoice.status = :status', { status: 'paid' });
+
+  const paidInvoices = await paidQuery.getCount();
+
+  const totalPaidAmount = await paidQuery
+    .select('SUM(invoice.totalAmount)', 'sum')
+    .getRawOne();
+
+  // ========================
+  // 🕒 PENDING INVOICES
+  // ========================
+  const pendingQuery = query.clone()
+    .andWhere('invoice.status = :status', { status: 'pending' });
+
+  const pendingInvoices = await pendingQuery.getCount();
+
+  const totalPendingAmount = await pendingQuery
+    .select('SUM(invoice.totalAmount)', 'sum')
+    .getRawOne();
+
+  // ========================
+  // 📦 RECENT 5 INVOICES
+  // ========================
+  const recentInvoices = await this.repo.find({
+    where: {
+      user: { id: user.sub },
+    },
+    order: {
+      id: 'DESC',
+    },
+    take: 5,
+  });
+
+  return {
+    totalInvoices,
+    paidInvoices,
+    pendingInvoices,
+    totalPaidAmount: Number(totalPaidAmount.sum) || 0,
+    totalPendingAmount: Number(totalPendingAmount.sum) || 0,
+    recentInvoices,
+  };
+}
 }

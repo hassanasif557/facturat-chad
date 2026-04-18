@@ -19,6 +19,7 @@ import { Roles } from 'src/auth/decorators/roles.decorator';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { UpdateInvoiceStatusDto } from './dto/update-invoice-status.dto';
+import { InvoiceDashboardFilterDto } from './dto/invoice-dashboard-filter.dto';
 
 @Controller('invoices')
 @UseGuards(SupabaseAuthGuard, RolesGuard)
@@ -82,5 +83,16 @@ export class InvoiceController {
     @Req() req,
   ) {
     return this.service.updateStatus(id, body.status, req.user);
+  }
+
+
+  // ✅ Dashboard api
+  @Get('dashboard')
+  @Roles('user')
+  dashboard(
+    @Req() req,
+    @Query() filter: InvoiceDashboardFilterDto,
+  ) {
+    return this.service.getDashboard(req.user, filter);
   }
 }
