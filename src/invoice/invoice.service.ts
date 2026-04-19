@@ -17,21 +17,22 @@ export class InvoiceService {
   async create(body: any, files: any[], user: any) {
     const products = JSON.parse(body.products);
 
-    // map images to products
+    const baseUrl = process.env.BASE_URL;
+
     const mappedProducts = products.map((p, index) => ({
       name: p.name,
       price: p.price,
-      quantity: p.quantity, // ✅ NEW
+      quantity: p.quantity,
       imageUrl: files[index]
-        ? `http://localhost:3000/uploads/${files[index].filename}`
+        ? `${baseUrl}/uploads/${files[index].filename}` // ✅ FIXED
         : null,
     }));
 
-    //calculate total amount
     const totalAmount = mappedProducts.reduce(
       (sum, p) => sum + p.price * p.quantity,
       0,
     );
+
     body.totalAmount = totalAmount.toString();
 
     // QR
@@ -39,11 +40,13 @@ export class InvoiceService {
     const qrCode = await QRCode.toDataURL(qrData);
 
     // PDF
-    const pdfPath = await this.generatePDF(
+    const pdfFileName = await this.generatePDF(
       body,
       mappedProducts,
       qrCode,
     );
+
+    const pdfUrl = `${baseUrl}/uploads/${pdfFileName}`; // ✅ PUBLIC URL
 
     const invoice = this.repo.create({
       customerName: body.customerName || '',
@@ -51,8 +54,8 @@ export class InvoiceService {
       totalAmount: parseFloat(body.totalAmount),
       products: mappedProducts,
       qrCode,
-      pdfPath,
-      status: 'pending', // ✅ ADD THIS
+      pdfPath: pdfUrl, // ✅ SAVE URL IN DB
+      status: 'pending',
       user: { id: user.sub },
     } as any);
 
@@ -61,14 +64,22 @@ export class InvoiceService {
 
   async generatePDF(body, products, qrCode) {
     const fileName = `invoice-${Date.now()}.pdf`;
-    const filePath = path.join(__dirname, '../../uploads', fileName);
+
+    // ✅ ALWAYS correct root path
+    const uploadPath = path.join(process.cwd(), 'uploads');
+
+    // ✅ ensure folder exists
+    if (!fs.existsSync(uploadPath)) {
+      fs.mkdirSync(uploadPath, { recursive: true });
+    }
+
+    const filePath = path.join(uploadPath, fileName);
 
     const doc = new PDFDocument();
     const stream = fs.createWriteStream(filePath);
 
     doc.pipe(stream);
 
-    // ===== TEMPLATE =====
     doc.fontSize(20).text('INVOICE', { align: 'center' });
 
     doc.moveDown();
@@ -82,7 +93,7 @@ export class InvoiceService {
     products.forEach((p, i) => {
       doc.text(
         `${i + 1}. ${p.name} | Qty: ${p.quantity} | Price: Rs ${p.price} | Total: Rs ${p.price * p.quantity}`,
-    );
+      );
     });
 
     // QR
@@ -95,7 +106,7 @@ export class InvoiceService {
     doc.end();
 
     return new Promise((resolve) => {
-      stream.on('finish', () => resolve(filePath));
+      stream.on('finish', () => resolve(fileName));
     });
   }
 

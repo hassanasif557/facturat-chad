@@ -2,16 +2,21 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import * as express from 'express';
-import path from 'path/win32';
+import * as path from 'path'; // ✅ FIXED
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  await app.listen(process.env.PORT ?? 3000);
+
+  // ✅ Global validation
   app.useGlobalPipes(new ValidationPipe());
-  
-  // directory path for upload files
+
+  // ✅ Static files setup (BEFORE listen)
   const uploadPath = path.join(process.cwd(), 'uploads');
   console.log('Serving uploads from:', uploadPath);
+
   app.use('/uploads', express.static(uploadPath));
+
+  // ✅ Start server LAST
+  await app.listen(process.env.PORT ?? 3000);
 }
 bootstrap();
