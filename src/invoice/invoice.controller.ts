@@ -21,6 +21,7 @@ import { diskStorage } from 'multer';
 import { UpdateInvoiceStatusDto } from './dto/update-invoice-status.dto';
 import { InvoiceDashboardFilterDto } from './dto/invoice-dashboard-filter.dto';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
+import { ReportFilterDto } from './dto/report-filter.dto';
 
 @Controller('invoices')
 @UseGuards(SupabaseAuthGuard, RolesGuard)
@@ -66,7 +67,7 @@ export class InvoiceController {
     return this.service.search(id, name, pagination);
   }
 
-  
+
   @Put(':id')
   @Roles('admin')
   update(@Param('id') id: number, @Body() body: any) {
@@ -100,5 +101,15 @@ export class InvoiceController {
     @Query() filter: InvoiceDashboardFilterDto,
   ) {
     return this.service.getDashboard(req.user, filter);
+  }
+
+  // ✅ Report api
+  @Get('report')
+  @Roles('user')
+  report(
+    @Req() req,
+    @Query() filter: ReportFilterDto,
+  ) {
+    return this.service.getReport(req.user, filter);
   }
 }

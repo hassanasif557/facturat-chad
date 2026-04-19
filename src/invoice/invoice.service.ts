@@ -275,7 +275,7 @@ export class InvoiceService {
     take: 5,
   });
 
-  // ========================
+    // ========================
   // 🔥 ALL-TIME QUERY (NO FILTER)
   // ========================
   const allTimeQuery = this.repo
@@ -285,10 +285,29 @@ export class InvoiceService {
   // TOTAL INVOICES (ALL TIME)
   const totalInvoicesOfAllTime = await allTimeQuery.getCount();
 
+  // PAID INVOICES (ALL TIME)
+  const paidInvoicesOfAllTime = await allTimeQuery
+    .clone()
+    .andWhere('invoice.status = :status', { status: 'paid' })
+    .getCount();
+
+  // PENDING INVOICES (ALL TIME)
+  const pendingInvoicesOfAllTime = await allTimeQuery
+    .clone()
+    .andWhere('invoice.status = :status', { status: 'pending' })
+    .getCount();
+
   // TOTAL PAID AMOUNT (ALL TIME)
   const totalPaidAmountAllTimeRaw = await allTimeQuery
     .clone()
     .andWhere('invoice.status = :status', { status: 'paid' })
+    .select('SUM(invoice.totalAmount)', 'sum')
+    .getRawOne();
+
+  // TOTAL PENDING AMOUNT (ALL TIME)
+  const totalPendingAmountAllTimeRaw = await allTimeQuery
+    .clone()
+    .andWhere('invoice.status = :status', { status: 'pending' })
     .select('SUM(invoice.totalAmount)', 'sum')
     .getRawOne();
 
@@ -300,13 +319,171 @@ export class InvoiceService {
     totalPaidAmount: Number(totalPaidAmount.sum) || 0,
     totalPendingAmount: Number(totalPendingAmount.sum) || 0,
 
-    // 🔹 ALL TIME (NEW)
+    // 🔹 ALL TIME (UPDATED)
     totalInvoicesOfAllTime,
+    paidInvoicesOfAllTime,
+    pendingInvoicesOfAllTime,
+
     totalPaidAmountOfAllTime:
       Number(totalPaidAmountAllTimeRaw.sum) || 0,
+
+    totalPendingAmountOfAllTime:
+      Number(totalPendingAmountAllTimeRaw.sum) || 0,
 
     // 🔹 EXTRA
     recentInvoices,
   };
-}
+  }
+
+
+  //Report api
+  async getReport(user: any, filter: any) {
+    const { startDate, endDate, type = 'monthly' } = filter;
+
+    const start =
+      startDate || new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+
+    const end = endDate || new Date();
+
+    // ========================
+    // BASE QUERY
+    // ========================
+    const baseQuery = this.repo
+      .createQueryBuilder('invoice')
+      .where('invoice.userId = :userId', { userId: user.sub })
+      .andWhere('invoice.date BETWEEN :start AND :end', {
+        start,
+        end,
+      });
+
+    // ========================
+    // TOTALS
+    // ========================
+    const totalRevenueRaw = await baseQuery
+      .clone()
+      .select('SUM(invoice.totalAmount)', 'sum')
+      .getRawOne();
+
+    const totalRevenue = Number(totalRevenueRaw.sum) || 0;
+
+    const vat = totalRevenue * 0.18;
+
+    const totalInvoices = await baseQuery.getCount();
+
+    const avgPayment =
+      totalInvoices > 0 ? totalRevenue / totalInvoices : 0;
+
+    // ========================
+    // STATUS COUNTS
+    // ========================
+    const paid = await baseQuery
+      .clone()
+      .andWhere('invoice.status = :status', { status: 'paid' })
+      .getCount();
+
+    const unpaid = await baseQuery
+      .clone()
+      .andWhere('invoice.status = :status', { status: 'unpaid' })
+      .getCount();
+
+    const pending = await baseQuery
+      .clone()
+      .andWhere('invoice.status = :status', { status: 'pending' })
+      .getCount();
+
+    const percentages = {
+      paid: totalInvoices ? (paid / totalInvoices) * 100 : 0,
+      unpaid: totalInvoices ? (unpaid / totalInvoices) * 100 : 0,
+      pending: totalInvoices ? (pending / totalInvoices) * 100 : 0,
+    };
+
+    // ========================
+    // CHART DATA
+    // ========================
+    let chartQuery;
+
+    if (type === 'daily') {
+      chartQuery = this.repo
+        .createQueryBuilder('invoice')
+        .select(
+          `TO_CHAR(invoice.date::DATE, 'YYYY-MM-DD')`,
+          'label',
+        )
+        .addSelect('SUM(invoice.totalAmount)', 'total')
+        .where('invoice.userId = :userId', { userId: user.sub })
+        .andWhere('invoice.date BETWEEN :start AND :end', {
+          start,
+          end,
+        })
+        .groupBy('label')
+        .orderBy('label', 'DESC')
+        .limit(10);
+    } 
+    
+    else if (type === 'weekly') {
+      chartQuery = this.repo
+        .createQueryBuilder('invoice')
+        .select(
+          `TO_CHAR(invoice.date::DATE, 'IYYY-IW')`,
+          'label',
+        )
+        .addSelect('SUM(invoice.totalAmount)', 'total')
+        .where('invoice.userId = :userId', { userId: user.sub })
+        .andWhere('invoice.date BETWEEN :start AND :end', {
+          start,
+          end,
+        })
+        .groupBy('label')
+        .orderBy('label', 'DESC')
+        .limit(10);
+    } 
+    
+    else {
+      // monthly (default)
+      chartQuery = this.repo
+        .createQueryBuilder('invoice')
+        .select(
+          `TO_CHAR(invoice.date::DATE, 'YYYY-MM')`,
+          'label',
+        )
+        .addSelect('SUM(invoice.totalAmount)', 'total')
+        .where('invoice.userId = :userId', { userId: user.sub })
+        .andWhere('invoice.date BETWEEN :start AND :end', {
+          start,
+          end,
+        })
+        .groupBy('label')
+        .orderBy('label', 'DESC')
+        .limit(10);
+    }
+
+    const rawChart = await chartQuery.getRawMany();
+
+    // ========================
+    // FIX RAW RESPONSE
+    // ========================
+    const chart = rawChart.map((item) => ({
+      label: item.label,
+      total: Number(item.total),
+    }));
+
+    // ========================
+    // FINAL RESPONSE
+    // ========================
+    return {
+      totalRevenue,
+      vat,
+      totalInvoices,
+      avgPayment,
+
+      status: {
+        paid,
+        unpaid,
+        pending,
+        percentages,
+      },
+
+      chart,
+    };
+  }
 }
