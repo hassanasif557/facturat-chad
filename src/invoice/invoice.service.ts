@@ -99,17 +99,45 @@ export class InvoiceService {
     });
   }
 
-  async findMy(user) {
-    return this.repo.find({
+  async findMy(user, pagination) {
+    const { page = 1, limit = 10 } = pagination;
+
+    const [data, total] = await this.repo.findAndCount({
       where: { user: { id: user.sub } },
+      order: { id: 'DESC' },
+      skip: (page - 1) * limit,
+      take: limit,
     });
+
+    return {
+      data,
+      total,
+      page,
+      lastPage: Math.ceil(total / limit),
+    };
   }
 
-  async findAll() {
-    return this.repo.find({ relations: ['user'] });
+  async findAll(pagination) {
+    const { page = 1, limit = 10 } = pagination;
+
+    const [data, total] = await this.repo.findAndCount({
+      relations: ['user'],
+      order: { id: 'DESC' },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+
+    return {
+      data,
+      total,
+      page,
+      lastPage: Math.ceil(total / limit),
+    };
   }
 
-  async search(id?: number, name?: string) {
+  async search(id?: number, name?: string, pagination?: any) {
+    const { page = 1, limit = 10 } = pagination || {};
+
     const query = this.repo
       .createQueryBuilder('invoice')
       .leftJoinAndSelect('invoice.user', 'user');
@@ -124,7 +152,19 @@ export class InvoiceService {
       });
     }
 
-    return query.getMany();
+    query.orderBy('invoice.id', 'DESC');
+
+    const [data, total] = await query
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
+
+    return {
+      data,
+      total,
+      page,
+      lastPage: Math.ceil(total / limit),
+    };
   }
 
   async update(id: number, body: any) {

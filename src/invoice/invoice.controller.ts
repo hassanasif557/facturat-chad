@@ -20,6 +20,7 @@ import { FilesInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { UpdateInvoiceStatusDto } from './dto/update-invoice-status.dto';
 import { InvoiceDashboardFilterDto } from './dto/invoice-dashboard-filter.dto';
+import { PaginationDto } from 'src/common/dto/pagination.dto';
 
 @Controller('invoices')
 @UseGuards(SupabaseAuthGuard, RolesGuard)
@@ -45,22 +46,27 @@ export class InvoiceController {
 
   @Get('my')
   @Roles('user')
-  my(@Req() req) {
-    return this.service.findMy(req.user);
+  my(@Req() req, @Query() pagination: PaginationDto) {
+    return this.service.findMy(req.user, pagination);
   }
 
   @Get()
   @Roles('admin')
-  all() {
-    return this.service.findAll();
+  all(@Query() pagination: PaginationDto) {
+    return this.service.findAll(pagination);
   }
 
   @Get('search')
   @Roles('admin')
-  search(@Query('id') id?: number, @Query('name') name?: string) {
-    return this.service.search(id, name);
+  search(
+    @Query('id') id?: number,
+    @Query('name') name?: string,
+    @Query() pagination?: PaginationDto,
+  ) {
+    return this.service.search(id, name, pagination);
   }
 
+  
   @Put(':id')
   @Roles('admin')
   update(@Param('id') id: number, @Body() body: any) {
