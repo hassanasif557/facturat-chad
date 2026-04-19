@@ -175,13 +175,15 @@ export class InvoiceService {
 
   //Dashboard api
   async getDashboard(user: any, filter: any) {
-  const query = this.repo
+  // ========================
+  // 📅 FILTERED QUERY
+  // ========================
+  const baseQuery = this.repo
     .createQueryBuilder('invoice')
     .where('invoice.userId = :userId', { userId: user.sub });
 
-  // ✅ DATE FILTER
   if (filter.startDate && filter.endDate) {
-    query.andWhere(
+    baseQuery.andWhere(
       'invoice.date BETWEEN :start AND :end',
       {
         start: filter.startDate,
@@ -191,14 +193,11 @@ export class InvoiceService {
   }
 
   // ========================
-  // 📊 TOTAL INVOICES
+  // 📊 FILTERED DATA
   // ========================
-  const totalInvoices = await query.getCount();
+  const totalInvoices = await baseQuery.getCount();
 
-  // ========================
-  // 💰 PAID INVOICES
-  // ========================
-  const paidQuery = query.clone()
+  const paidQuery = baseQuery.clone()
     .andWhere('invoice.status = :status', { status: 'paid' });
 
   const paidInvoices = await paidQuery.getCount();
@@ -207,10 +206,7 @@ export class InvoiceService {
     .select('SUM(invoice.totalAmount)', 'sum')
     .getRawOne();
 
-  // ========================
-  // 🕒 PENDING INVOICES
-  // ========================
-  const pendingQuery = query.clone()
+  const pendingQuery = baseQuery.clone()
     .andWhere('invoice.status = :status', { status: 'pending' });
 
   const pendingInvoices = await pendingQuery.getCount();
@@ -220,24 +216,45 @@ export class InvoiceService {
     .getRawOne();
 
   // ========================
-  // 📦 RECENT 5 INVOICES
+  // 📦 RECENT (FILTERED OR NOT — your choice)
   // ========================
   const recentInvoices = await this.repo.find({
-    where: {
-      user: { id: user.sub },
-    },
-    order: {
-      id: 'DESC',
-    },
+    where: { user: { id: user.sub } },
+    order: { id: 'DESC' },
     take: 5,
   });
 
+  // ========================
+  // 🔥 ALL-TIME QUERY (NO FILTER)
+  // ========================
+  const allTimeQuery = this.repo
+    .createQueryBuilder('invoice')
+    .where('invoice.userId = :userId', { userId: user.sub });
+
+  // TOTAL INVOICES (ALL TIME)
+  const totalInvoicesOfAllTime = await allTimeQuery.getCount();
+
+  // TOTAL PAID AMOUNT (ALL TIME)
+  const totalPaidAmountAllTimeRaw = await allTimeQuery
+    .clone()
+    .andWhere('invoice.status = :status', { status: 'paid' })
+    .select('SUM(invoice.totalAmount)', 'sum')
+    .getRawOne();
+
   return {
+    // 🔹 FILTERED
     totalInvoices,
     paidInvoices,
     pendingInvoices,
     totalPaidAmount: Number(totalPaidAmount.sum) || 0,
     totalPendingAmount: Number(totalPendingAmount.sum) || 0,
+
+    // 🔹 ALL TIME (NEW)
+    totalInvoicesOfAllTime,
+    totalPaidAmountOfAllTime:
+      Number(totalPaidAmountAllTimeRaw.sum) || 0,
+
+    // 🔹 EXTRA
     recentInvoices,
   };
 }
