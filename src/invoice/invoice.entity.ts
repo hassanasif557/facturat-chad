@@ -3,6 +3,8 @@ import {
   PrimaryGeneratedColumn,
   Column,
   ManyToOne,
+  UpdateDateColumn,
+  CreateDateColumn,
 } from 'typeorm';
 import { User } from 'src/user/user.entity';
 
@@ -45,4 +47,11 @@ export class Invoice {
 
   @ManyToOne(() => User, (user) => user.id)
   user!: User;
+
+  // ✅ NEW (IMPORTANT)
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
 }

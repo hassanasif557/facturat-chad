@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, UpdateDateColumn, CreateDateColumn } from 'typeorm';
 
 export enum Role {
   ADMIN = 'admin',
@@ -48,4 +48,11 @@ export class User {
   // ✅ NEW FIELD for refresh tokens
   @Column({ nullable: true })
   refreshToken!: string;
+
+   // ✅ NEW
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
 }
