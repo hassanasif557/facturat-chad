@@ -67,7 +67,6 @@ export class InvoiceController {
     return this.service.search(id, name, pagination);
   }
 
-
   @Put(':id')
   @Roles('admin')
   update(@Param('id') id: number, @Body() body: any) {
@@ -80,7 +79,6 @@ export class InvoiceController {
     return this.service.delete(id);
   }
 
-
   // ✅ USER: UPDATE OWN INVOICE STATUS
   @Put(':id/status')
   @Roles('user')
@@ -92,24 +90,23 @@ export class InvoiceController {
     return this.service.updateStatus(id, body.status, req.user);
   }
 
-
   // ✅ Dashboard api
   @Get('dashboard')
   @Roles('user')
-  dashboard(
-    @Req() req,
-    @Query() filter: InvoiceDashboardFilterDto,
-  ) {
+  dashboard(@Req() req, @Query() filter: InvoiceDashboardFilterDto) {
     return this.service.getDashboard(req.user, filter);
   }
 
   // ✅ Report api
   @Get('report')
   @Roles('user')
-  report(
-    @Req() req,
-    @Query() filter: ReportFilterDto,
-  ) {
+  report(@Req() req, @Query() filter: ReportFilterDto) {
     return this.service.getReport(req.user, filter);
+  }
+
+  @Get('admin/dashboard')
+  @Roles('admin')
+  adminDashboard() {
+    return this.service.getAdminDashboard();
   }
 }

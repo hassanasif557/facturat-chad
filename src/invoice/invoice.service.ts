@@ -6,12 +6,18 @@ import * as QRCode from 'qrcode';
 import PDFDocument from 'pdfkit';
 import * as fs from 'fs';
 import * as path from 'path';
+import { User } from 'src/user/user.entity';
+import { InvoiceStatus } from './invoice.entity';
+import { VerificationStatus } from 'src/user/user.entity';
 
 @Injectable()
 export class InvoiceService {
   constructor(
     @InjectRepository(Invoice)
     private repo: Repository<Invoice>,
+
+    @InjectRepository(User)
+    private userRepo: Repository<User>,
   ) {}
 
   async create(body: any, files: any[], user: any) {
@@ -40,11 +46,7 @@ export class InvoiceService {
     const qrCode = await QRCode.toDataURL(qrData);
 
     // PDF
-    const pdfFileName = await this.generatePDF(
-      body,
-      mappedProducts,
-      qrCode,
-    );
+    const pdfFileName = await this.generatePDF(body, mappedProducts, qrCode);
 
     const pdfUrl = `${baseUrl}/uploads/${pdfFileName}`; // ✅ PUBLIC URL
 
@@ -201,7 +203,6 @@ export class InvoiceService {
     return { message: 'Deleted' };
   }
 
-
   async updateStatus(id: number, status: string, user: any) {
     const invoice = await this.repo.findOne({
       where: { id },
@@ -222,119 +223,114 @@ export class InvoiceService {
     return this.repo.save(invoice);
   }
 
-
-
   //Dashboard api
   async getDashboard(user: any, filter: any) {
-  // ========================
-  // 📅 FILTERED QUERY
-  // ========================
-  const baseQuery = this.repo
-    .createQueryBuilder('invoice')
-    .where('invoice.userId = :userId', { userId: user.sub });
+    // ========================
+    // 📅 FILTERED QUERY
+    // ========================
+    const baseQuery = this.repo
+      .createQueryBuilder('invoice')
+      .where('invoice.userId = :userId', { userId: user.sub });
 
-  if (filter.startDate && filter.endDate) {
-    baseQuery.andWhere(
-      'invoice.date BETWEEN :start AND :end',
-      {
+    if (filter.startDate && filter.endDate) {
+      baseQuery.andWhere('invoice.date BETWEEN :start AND :end', {
         start: filter.startDate,
         end: filter.endDate,
-      },
-    );
-  }
-
-  // ========================
-  // 📊 FILTERED DATA
-  // ========================
-  const totalInvoices = await baseQuery.getCount();
-
-  const paidQuery = baseQuery.clone()
-    .andWhere('invoice.status = :status', { status: 'paid' });
-
-  const paidInvoices = await paidQuery.getCount();
-
-  const totalPaidAmount = await paidQuery
-    .select('SUM(invoice.totalAmount)', 'sum')
-    .getRawOne();
-
-  const pendingQuery = baseQuery.clone()
-    .andWhere('invoice.status = :status', { status: 'pending' });
-
-  const pendingInvoices = await pendingQuery.getCount();
-
-  const totalPendingAmount = await pendingQuery
-    .select('SUM(invoice.totalAmount)', 'sum')
-    .getRawOne();
-
-  // ========================
-  // 📦 RECENT (FILTERED OR NOT — your choice)
-  // ========================
-  const recentInvoices = await this.repo.find({
-    where: { user: { id: user.sub } },
-    order: { id: 'DESC' },
-    take: 5,
-  });
+      });
+    }
 
     // ========================
-  // 🔥 ALL-TIME QUERY (NO FILTER)
-  // ========================
-  const allTimeQuery = this.repo
-    .createQueryBuilder('invoice')
-    .where('invoice.userId = :userId', { userId: user.sub });
+    // 📊 FILTERED DATA
+    // ========================
+    const totalInvoices = await baseQuery.getCount();
 
-  // TOTAL INVOICES (ALL TIME)
-  const totalInvoicesOfAllTime = await allTimeQuery.getCount();
+    const paidQuery = baseQuery
+      .clone()
+      .andWhere('invoice.status = :status', { status: 'paid' });
 
-  // PAID INVOICES (ALL TIME)
-  const paidInvoicesOfAllTime = await allTimeQuery
-    .clone()
-    .andWhere('invoice.status = :status', { status: 'paid' })
-    .getCount();
+    const paidInvoices = await paidQuery.getCount();
 
-  // PENDING INVOICES (ALL TIME)
-  const pendingInvoicesOfAllTime = await allTimeQuery
-    .clone()
-    .andWhere('invoice.status = :status', { status: 'pending' })
-    .getCount();
+    const totalPaidAmount = await paidQuery
+      .select('SUM(invoice.totalAmount)', 'sum')
+      .getRawOne();
 
-  // TOTAL PAID AMOUNT (ALL TIME)
-  const totalPaidAmountAllTimeRaw = await allTimeQuery
-    .clone()
-    .andWhere('invoice.status = :status', { status: 'paid' })
-    .select('SUM(invoice.totalAmount)', 'sum')
-    .getRawOne();
+    const pendingQuery = baseQuery
+      .clone()
+      .andWhere('invoice.status = :status', { status: 'pending' });
 
-  // TOTAL PENDING AMOUNT (ALL TIME)
-  const totalPendingAmountAllTimeRaw = await allTimeQuery
-    .clone()
-    .andWhere('invoice.status = :status', { status: 'pending' })
-    .select('SUM(invoice.totalAmount)', 'sum')
-    .getRawOne();
+    const pendingInvoices = await pendingQuery.getCount();
 
-  return {
-    // 🔹 FILTERED
-    totalInvoices,
-    paidInvoices,
-    pendingInvoices,
-    totalPaidAmount: Number(totalPaidAmount.sum) || 0,
-    totalPendingAmount: Number(totalPendingAmount.sum) || 0,
+    const totalPendingAmount = await pendingQuery
+      .select('SUM(invoice.totalAmount)', 'sum')
+      .getRawOne();
 
-    // 🔹 ALL TIME (UPDATED)
-    totalInvoicesOfAllTime,
-    paidInvoicesOfAllTime,
-    pendingInvoicesOfAllTime,
+    // ========================
+    // 📦 RECENT (FILTERED OR NOT — your choice)
+    // ========================
+    const recentInvoices = await this.repo.find({
+      where: { user: { id: user.sub } },
+      order: { id: 'DESC' },
+      take: 5,
+    });
 
-    totalPaidAmountOfAllTime:
-      Number(totalPaidAmountAllTimeRaw.sum) || 0,
+    // ========================
+    // 🔥 ALL-TIME QUERY (NO FILTER)
+    // ========================
+    const allTimeQuery = this.repo
+      .createQueryBuilder('invoice')
+      .where('invoice.userId = :userId', { userId: user.sub });
 
-    totalPendingAmountOfAllTime:
-      Number(totalPendingAmountAllTimeRaw.sum) || 0,
+    // TOTAL INVOICES (ALL TIME)
+    const totalInvoicesOfAllTime = await allTimeQuery.getCount();
 
-    // 🔹 EXTRA
-    recentInvoices,
-  };
+    // PAID INVOICES (ALL TIME)
+    const paidInvoicesOfAllTime = await allTimeQuery
+      .clone()
+      .andWhere('invoice.status = :status', { status: 'paid' })
+      .getCount();
+
+    // PENDING INVOICES (ALL TIME)
+    const pendingInvoicesOfAllTime = await allTimeQuery
+      .clone()
+      .andWhere('invoice.status = :status', { status: 'pending' })
+      .getCount();
+
+    // TOTAL PAID AMOUNT (ALL TIME)
+    const totalPaidAmountAllTimeRaw = await allTimeQuery
+      .clone()
+      .andWhere('invoice.status = :status', { status: 'paid' })
+      .select('SUM(invoice.totalAmount)', 'sum')
+      .getRawOne();
+
+    // TOTAL PENDING AMOUNT (ALL TIME)
+    const totalPendingAmountAllTimeRaw = await allTimeQuery
+      .clone()
+      .andWhere('invoice.status = :status', { status: 'pending' })
+      .select('SUM(invoice.totalAmount)', 'sum')
+      .getRawOne();
+
+    return {
+      // 🔹 FILTERED
+      totalInvoices,
+      paidInvoices,
+      pendingInvoices,
+      totalPaidAmount: Number(totalPaidAmount.sum) || 0,
+      totalPendingAmount: Number(totalPendingAmount.sum) || 0,
+
+      // 🔹 ALL TIME (UPDATED)
+      totalInvoicesOfAllTime,
+      paidInvoicesOfAllTime,
+      pendingInvoicesOfAllTime,
+
+      totalPaidAmountOfAllTime: Number(totalPaidAmountAllTimeRaw.sum) || 0,
+
+      totalPendingAmountOfAllTime:
+        Number(totalPendingAmountAllTimeRaw.sum) || 0,
+
+      // 🔹 EXTRA
+      recentInvoices,
+    };
   }
-
 
   //Report api
   async getReport(user: any, filter: any) {
@@ -370,8 +366,7 @@ export class InvoiceService {
 
     const totalInvoices = await baseQuery.getCount();
 
-    const avgPayment =
-      totalInvoices > 0 ? totalRevenue / totalInvoices : 0;
+    const avgPayment = totalInvoices > 0 ? totalRevenue / totalInvoices : 0;
 
     // ========================
     // STATUS COUNTS
@@ -405,10 +400,7 @@ export class InvoiceService {
     if (type === 'daily') {
       chartQuery = this.repo
         .createQueryBuilder('invoice')
-        .select(
-          `TO_CHAR(invoice.date::DATE, 'YYYY-MM-DD')`,
-          'label',
-        )
+        .select(`TO_CHAR(invoice.date::DATE, 'YYYY-MM-DD')`, 'label')
         .addSelect('SUM(invoice.totalAmount)', 'total')
         .where('invoice.userId = :userId', { userId: user.sub })
         .andWhere('invoice.date BETWEEN :start AND :end', {
@@ -418,15 +410,10 @@ export class InvoiceService {
         .groupBy('label')
         .orderBy('label', 'DESC')
         .limit(10);
-    } 
-    
-    else if (type === 'weekly') {
+    } else if (type === 'weekly') {
       chartQuery = this.repo
         .createQueryBuilder('invoice')
-        .select(
-          `TO_CHAR(invoice.date::DATE, 'IYYY-IW')`,
-          'label',
-        )
+        .select(`TO_CHAR(invoice.date::DATE, 'IYYY-IW')`, 'label')
         .addSelect('SUM(invoice.totalAmount)', 'total')
         .where('invoice.userId = :userId', { userId: user.sub })
         .andWhere('invoice.date BETWEEN :start AND :end', {
@@ -436,16 +423,11 @@ export class InvoiceService {
         .groupBy('label')
         .orderBy('label', 'DESC')
         .limit(10);
-    } 
-    
-    else {
+    } else {
       // monthly (default)
       chartQuery = this.repo
         .createQueryBuilder('invoice')
-        .select(
-          `TO_CHAR(invoice.date::DATE, 'YYYY-MM')`,
-          'label',
-        )
+        .select(`TO_CHAR(invoice.date::DATE, 'YYYY-MM')`, 'label')
         .addSelect('SUM(invoice.totalAmount)', 'total')
         .where('invoice.userId = :userId', { userId: user.sub })
         .andWhere('invoice.date BETWEEN :start AND :end', {
@@ -484,6 +466,120 @@ export class InvoiceService {
       },
 
       chart,
+    };
+  }
+
+  //Admin Dashboard api
+  async getAdminDashboard() {
+    // ========================
+    // 📦 RECENT INVOICES
+    // ========================
+    const recentInvoices = await this.repo.find({
+      order: { id: 'DESC' },
+      take: 6,
+      relations: ['user'],
+    });
+
+    // ========================
+    // 👤 USERS STATS (ALL TIME)
+    // ========================
+    const totalUsers = await this.userRepo.count();
+
+    const verifiedUsers = await this.userRepo.count({
+      where: { verificationStatus: VerificationStatus.VERIFIED },
+    });
+
+    const pendingUsers = await this.userRepo.count({
+      where: { verificationStatus: VerificationStatus.PENDING },
+    });
+
+    const notVerifiedUsers = await this.userRepo.count({
+      where: { verificationStatus: VerificationStatus.NOT_VERIFIED },
+    });
+
+    // ========================
+    // 🧾 INVOICE STATS (ALL TIME)
+    // ========================
+    const totalInvoices = await this.repo.count();
+
+    const paidInvoices = await this.repo.count({
+      where: { status: InvoiceStatus.PAID },
+    });
+
+    const pendingInvoices = await this.repo.count({
+      where: { status: InvoiceStatus.PENDING },
+    });
+
+    const unpaidInvoices = await this.repo.count({
+      where: { status: InvoiceStatus.UNPAID },
+    });
+
+    const totalRevenueRaw = await this.repo
+      .createQueryBuilder('invoice')
+      .select('SUM(invoice.totalAmount)', 'sum')
+      .getRawOne();
+
+    const totalRevenue = Number(totalRevenueRaw.sum) || 0;
+
+    // ========================
+    // 📊 USERS MONTHLY
+    // ========================
+    const usersMonthlyRaw = await this.userRepo
+      .createQueryBuilder('u')
+      .select(`TO_CHAR(u."createdAt", 'YYYY-MM')`, 'label')
+      .addSelect('COUNT(u.id)', 'total')
+      .groupBy(`TO_CHAR(u."createdAt", 'YYYY-MM')`)
+      .orderBy('label', 'DESC')
+      .limit(12)
+      .getRawMany();
+
+    const usersMonthly = usersMonthlyRaw.map((u) => ({
+      label: u.label,
+      total: Number(u.total),
+    }));
+
+    // ========================
+    // 💰 REVENUE MONTHLY
+    // ========================
+    const revenueMonthlyRaw = await this.repo
+      .createQueryBuilder('invoice')
+      .select(`TO_CHAR(invoice.date::DATE, 'YYYY-MM')`, 'label')
+      .addSelect('SUM(invoice.totalAmount)', 'total')
+      .groupBy('label')
+      .orderBy('label', 'DESC')
+      .limit(12)
+      .getRawMany();
+
+    const revenueMonthly = revenueMonthlyRaw.map((r) => ({
+      label: r.label,
+      total: Number(r.total),
+    }));
+
+    // ========================
+    // 🎯 FINAL RESPONSE
+    // ========================
+    return {
+      // 🔹 RECENT
+      recentInvoices,
+
+      // 🔹 USERS
+      totalUsers,
+      verifiedUsers,
+      pendingUsers,
+      notVerifiedUsers,
+
+      // 🔹 INVOICES
+      totalInvoices,
+      paidInvoices,
+      pendingInvoices,
+      unpaidInvoices,
+
+      // 🔹 REVENUE
+      totalRevenue,
+
+      // 🔹 CHARTS
+      usersMonthly,
+      revenueMonthly,
     };
   }
 }
