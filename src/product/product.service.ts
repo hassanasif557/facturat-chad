@@ -24,8 +24,38 @@ export class ProductService {
     });
   }
 
-  async getGlobal() {
-    return this.repo.find({ where: { isGlobal: true } });
+  async getGlobal(query: any) {
+    const { page = 1, limit = 10, name, category } = query;
+
+    const qb = this.repo
+      .createQueryBuilder('product')
+      .where('product.isGlobal = :isGlobal', { isGlobal: true });
+
+    if (name) {
+      qb.andWhere('product.name ILIKE :name', {
+        name: `%${name}%`,
+      });
+    }
+
+    if (category) {
+      qb.andWhere('product.category ILIKE :category', {
+        category: `%${category}%`,
+      });
+    }
+
+    qb.orderBy('product.id', 'DESC');
+
+    const [data, total] = await qb
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
+
+    return {
+      data,
+      total,
+      page: Number(page),
+      lastPage: Math.ceil(total / limit),
+    };
   }
 
   async updateGlobal(id: number, data) {
@@ -48,25 +78,54 @@ export class ProductService {
     });
   }
 
-  async getUserProducts(user) {
-    return this.repo.find({
-      where: { user: { id: user.sub }, isGlobal: false },
-    });
+  async getUserProducts(user: any, query: any) {
+    const { page = 1, limit = 10, name, category } = query;
+
+    const qb = this.repo
+      .createQueryBuilder('product')
+      .where('product.isGlobal = :isGlobal', { isGlobal: false })
+      .andWhere('product.userId = :userId', { userId: user.sub });
+
+    if (name) {
+      qb.andWhere('product.name ILIKE :name', {
+        name: `%${name}%`,
+      });
+    }
+
+    if (category) {
+      qb.andWhere('product.category ILIKE :category', {
+        category: `%${category}%`,
+      });
+    }
+
+    qb.orderBy('product.id', 'DESC');
+
+    const [data, total] = await qb
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
+
+    return {
+      data,
+      total,
+      page: Number(page),
+      lastPage: Math.ceil(total / limit),
+    };
   }
 
   async updateUserProduct(id: number, data, user) {
     const product = await this.repo.findOne({
-    where: { id },
-    relations: ['user'],
-  });
+      where: { id },
+      relations: ['user'],
+    });
 
-  if (!product) {
-    throw new NotFoundException('Product not found');
-  }
+    if (!product) {
+      throw new NotFoundException('Product not found');
+    }
 
-  if (product.user.id !== user.sub) {
-    throw new ForbiddenException('Not your product');
-  }
+    if (product.user.id !== user.sub) {
+      throw new ForbiddenException('Not your product');
+    }
 
     Object.assign(product, data);
     return this.repo.save(product);
@@ -79,8 +138,8 @@ export class ProductService {
     });
 
     if (!product) {
-    throw new NotFoundException('Product not found');
-  }
+      throw new NotFoundException('Product not found');
+    }
 
     if (product.user.id !== user.sub) {
       throw new ForbiddenException('Not your product');

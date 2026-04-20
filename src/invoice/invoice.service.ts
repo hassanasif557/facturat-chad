@@ -9,6 +9,7 @@ import * as path from 'path';
 import { User } from 'src/user/user.entity';
 import { InvoiceStatus } from './invoice.entity';
 import { VerificationStatus } from 'src/user/user.entity';
+import { InvoiceSearchDto } from './dto/search-invoice.dto';
 
 @Injectable()
 export class InvoiceService {
@@ -148,26 +149,54 @@ export class InvoiceService {
     };
   }
 
-  async search(id?: number, name?: string, pagination?: any) {
-    const { page = 1, limit = 10 } = pagination || {};
+  async search(query: InvoiceSearchDto) {
+    const {
+      id,
+      name,
+      startDate,
+      endDate,
+      minPrice,
+      maxPrice,
+      status,
+      page = 1,
+      limit = 10,
+    } = query;
 
-    const query = this.repo
+    const qb = this.repo
       .createQueryBuilder('invoice')
       .leftJoinAndSelect('invoice.user', 'user');
 
     if (id) {
-      query.andWhere('invoice.id = :id', { id });
+      qb.andWhere('invoice.id = :id', { id });
     }
 
     if (name) {
-      query.andWhere('user.name ILIKE :name', {
+      qb.andWhere('user.name ILIKE :name', {
         name: `%${name}%`,
       });
     }
 
-    query.orderBy('invoice.id', 'DESC');
+    if (startDate && endDate) {
+      qb.andWhere('invoice.date BETWEEN :start AND :end', {
+        start: startDate,
+        end: endDate,
+      });
+    }
 
-    const [data, total] = await query
+    if (minPrice !== undefined && maxPrice !== undefined) {
+      qb.andWhere('invoice.totalAmount BETWEEN :min AND :max', {
+        min: minPrice,
+        max: maxPrice,
+      });
+    }
+
+    if (status) {
+      qb.andWhere('invoice.status = :status', { status });
+    }
+
+    qb.orderBy('invoice.id', 'DESC');
+
+    const [data, total] = await qb
       .skip((page - 1) * limit)
       .take(limit)
       .getManyAndCount();

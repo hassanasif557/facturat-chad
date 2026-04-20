@@ -10,6 +10,7 @@ import {
   Req,
   UseInterceptors,
   UploadedFile,
+  Query,
 } from '@nestjs/common';
 import { ProductService } from './product.service';
 import { SupabaseAuthGuard } from 'src/auth/supabase-auth/supabase-auth.guard';
@@ -51,8 +52,8 @@ export class ProductController {
 
   @Get('global')
   @Roles('admin', 'user')
-  getGlobal() {
-    return this.service.getGlobal();
+  getGlobal(@Query() query: any) {
+    return this.service.getGlobal(query);
   }
 
   @Put('global/:id')
@@ -77,8 +78,8 @@ export class ProductController {
 
   @Get()
   @Roles('user')
-  getUser(@Req() req) {
-    return this.service.getUserProducts(req.user);
+  getUser(@Req() req, @Query() query: any) {
+    return this.service.getUserProducts(req.user, query);
   }
 
   @Put(':id')

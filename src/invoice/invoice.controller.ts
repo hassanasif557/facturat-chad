@@ -22,6 +22,7 @@ import { UpdateInvoiceStatusDto } from './dto/update-invoice-status.dto';
 import { InvoiceDashboardFilterDto } from './dto/invoice-dashboard-filter.dto';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
 import { ReportFilterDto } from './dto/report-filter.dto';
+import { InvoiceSearchDto } from './dto/search-invoice.dto';
 
 @Controller('invoices')
 @UseGuards(SupabaseAuthGuard, RolesGuard)
@@ -58,14 +59,10 @@ export class InvoiceController {
   }
 
   @Get('search')
-  @Roles('admin')
-  search(
-    @Query('id') id?: number,
-    @Query('name') name?: string,
-    @Query() pagination?: PaginationDto,
-  ) {
-    return this.service.search(id, name, pagination);
-  }
+@Roles('admin')
+search(@Query() query: InvoiceSearchDto) {
+  return this.service.search(query);
+}
 
   @Put(':id')
   @Roles('admin')
