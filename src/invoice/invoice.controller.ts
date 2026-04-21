@@ -59,10 +59,10 @@ export class InvoiceController {
   }
 
   @Get('search')
-@Roles('admin')
-search(@Query() query: InvoiceSearchDto) {
-  return this.service.search(query);
-}
+  @Roles('admin')
+  search(@Query() query: InvoiceSearchDto) {
+    return this.service.search(query);
+  }
 
   @Put(':id')
   @Roles('admin')
@@ -105,5 +105,14 @@ search(@Query() query: InvoiceSearchDto) {
   @Roles('admin')
   adminDashboard() {
     return this.service.getAdminDashboard();
+  }
+
+  @Get('admin/report')
+  @Roles('admin')
+  getAdminReport(
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.service.getAdminReport({ startDate, endDate });
   }
 }

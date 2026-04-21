@@ -611,4 +611,142 @@ export class InvoiceService {
       revenueMonthly,
     };
   }
+
+  //Admin Report api
+  async getAdminReport(filter: any) {
+    const { startDate, endDate } = filter;
+
+    const baseQuery = this.repo.createQueryBuilder('invoice');
+
+    // ========================
+    // 📅 DATE FILTER
+    // ========================
+    if (startDate && endDate) {
+      baseQuery.andWhere('invoice.date BETWEEN :start AND :end', {
+        start: startDate,
+        end: endDate,
+      });
+    }
+
+    // ========================
+    // 💰 TOTAL REVENUE
+    // ========================
+    const totalRevenueRaw = await baseQuery
+      .clone()
+      .select('SUM(invoice.totalAmount)', 'sum')
+      .getRawOne();
+
+    const totalRevenue = Number(totalRevenueRaw.sum) || 0;
+
+    // ========================
+    // 💳 STATUS REVENUE
+    // ========================
+    const paidRevenueRaw = await baseQuery
+      .clone()
+      .andWhere('invoice.status = :status', { status: 'paid' })
+      .select('SUM(invoice.totalAmount)', 'sum')
+      .getRawOne();
+
+    const unpaidRevenueRaw = await baseQuery
+      .clone()
+      .andWhere('invoice.status = :status', { status: 'unpaid' })
+      .select('SUM(invoice.totalAmount)', 'sum')
+      .getRawOne();
+
+    const pendingRevenueRaw = await baseQuery
+      .clone()
+      .andWhere('invoice.status = :status', { status: 'pending' })
+      .select('SUM(invoice.totalAmount)', 'sum')
+      .getRawOne();
+
+    const paidRevenue = Number(paidRevenueRaw.sum) || 0;
+    const unpaidRevenue = Number(unpaidRevenueRaw.sum) || 0;
+    const pendingRevenue = Number(pendingRevenueRaw.sum) || 0;
+
+    // ========================
+    // 🧮 VAT CALCULATIONS
+    // ========================
+    const vatRate = 0.18;
+
+    const totalVAT = totalRevenue * vatRate;
+    const paidVAT = paidRevenue * vatRate;
+    const unpaidVAT = unpaidRevenue * vatRate;
+    const pendingVAT = pendingRevenue * vatRate;
+
+    // ========================
+    // 📊 INVOICE COUNTS
+    // ========================
+    const totalInvoices = await baseQuery.getCount();
+
+    const paidInvoices = await baseQuery
+      .clone()
+      .andWhere('invoice.status = :status', { status: 'paid' })
+      .getCount();
+
+    const unpaidInvoices = await baseQuery
+      .clone()
+      .andWhere('invoice.status = :status', { status: 'unpaid' })
+      .getCount();
+
+    const pendingInvoices = await baseQuery
+      .clone()
+      .andWhere('invoice.status = :status', { status: 'pending' })
+      .getCount();
+
+    // ========================
+    // 📊 MONTHLY REVENUE CHART
+    // ========================
+    const monthlyRaw = await this.repo
+      .createQueryBuilder('invoice')
+      .select(`TO_CHAR(invoice.date::DATE, 'YYYY-MM')`, 'label')
+      .addSelect('SUM(invoice.totalAmount)', 'total')
+      .where(
+        startDate && endDate ? 'invoice.date BETWEEN :start AND :end' : '1=1',
+        { start: startDate, end: endDate },
+      )
+      .groupBy('label')
+      .orderBy('label', 'ASC')
+      .getRawMany();
+
+    const monthlyChart = monthlyRaw.map((item) => ({
+      label: item.label,
+      total: Number(item.total),
+    }));
+
+    // ========================
+    // 📊 STATUS REVENUE CHART
+    // ========================
+    const statusChart = [
+      { label: 'paid', total: paidRevenue },
+      { label: 'unpaid', total: unpaidRevenue },
+      { label: 'pending', total: pendingRevenue },
+    ];
+
+    // ========================
+    // ✅ FINAL RESPONSE
+    // ========================
+    return {
+      // 💰 REVENUE
+      totalRevenue,
+      paidRevenue,
+      unpaidRevenue,
+      pendingRevenue,
+
+      // 🧾 VAT
+      totalVAT,
+      paidVAT,
+      unpaidVAT,
+      pendingVAT,
+
+      // 📊 COUNTS
+      totalInvoices,
+      paidInvoices,
+      unpaidInvoices,
+      pendingInvoices,
+
+      // 📈 CHARTS
+      monthlyChart,
+      statusChart,
+    };
+  }
 }
