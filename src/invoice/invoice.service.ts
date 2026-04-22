@@ -10,6 +10,7 @@ import { User } from 'src/user/user.entity';
 import { InvoiceStatus } from './invoice.entity';
 import { VerificationStatus } from 'src/user/user.entity';
 import { InvoiceSearchDto } from './dto/search-invoice.dto';
+import { SettingService } from 'src/settings/setting.service';
 
 @Injectable()
 export class InvoiceService {
@@ -19,6 +20,8 @@ export class InvoiceService {
 
     @InjectRepository(User)
     private userRepo: Repository<User>,
+
+    private settingService: SettingService, // ✅ ADD THIS
   ) {}
 
   async create(body: any, files: any[], user: any) {
@@ -391,7 +394,8 @@ export class InvoiceService {
 
     const totalRevenue = Number(totalRevenueRaw.sum) || 0;
 
-    const vat = totalRevenue * 0.18;
+    // const vat = totalRevenue * 0.18;
+    const vat = await this.settingService.getNumber('VAT_RATE');
 
     const totalInvoices = await baseQuery.getCount();
 
@@ -666,7 +670,7 @@ export class InvoiceService {
     // ========================
     // 🧮 VAT CALCULATIONS
     // ========================
-    const vatRate = 0.18;
+    const vatRate = await this.settingService.getNumber('VAT_RATE');
 
     const totalVAT = totalRevenue * vatRate;
     const paidVAT = paidRevenue * vatRate;
