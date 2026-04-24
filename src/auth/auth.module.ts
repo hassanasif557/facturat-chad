@@ -6,12 +6,18 @@ import { UserModule } from '../user/user.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from 'src/user/user.entity';
+import { Plan } from 'src/plan/plan.entity';
+import { Subscription } from 'src/subscription/subscription.entity';
 
 @Module({
   imports: [
     UserModule,
     ConfigModule,
-    TypeOrmModule.forFeature([User]),
+    TypeOrmModule.forFeature([
+      User,
+      Plan,        
+      Subscription,
+    ]),
 
     JwtModule.registerAsync({
       imports: [ConfigModule],

@@ -7,6 +7,14 @@ import * as path from 'path'; // ✅ FIXED
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  app.enableCors({
+  origin: [
+    process.env.BASE_URL_PROD,
+    'https://www.figma.com',
+  ],
+  credentials: true,
+});
+
   // ✅ Global validation
   app.useGlobalPipes(new ValidationPipe());
 

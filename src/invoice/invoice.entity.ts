@@ -7,6 +7,7 @@ import {
   CreateDateColumn,
 } from 'typeorm';
 import { User } from 'src/user/user.entity';
+import { Organization } from 'src/organization/organization.entity';
 
 export enum InvoiceStatus {
   PAID = 'paid',
@@ -44,6 +45,9 @@ export class Invoice {
     default: InvoiceStatus.PENDING,
   })
   status!: InvoiceStatus;
+
+  @ManyToOne(() => Organization, { nullable: true })
+  organization!: Organization | null;
 
   @ManyToOne(() => User, (user) => user.id)
   user!: User;

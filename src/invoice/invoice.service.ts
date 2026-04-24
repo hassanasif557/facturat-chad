@@ -1,6 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DeepPartial, Repository } from 'typeorm';
 import { Invoice } from './invoice.entity';
 import * as QRCode from 'qrcode';
 import PDFDocument from 'pdfkit';
@@ -11,6 +15,8 @@ import { InvoiceStatus } from './invoice.entity';
 import { VerificationStatus } from 'src/user/user.entity';
 import { InvoiceSearchDto } from './dto/search-invoice.dto';
 import { SettingService } from 'src/settings/setting.service';
+import { UsageService } from 'src/usage/usage.service'; // Assuming this path
+import { SubscriptionService } from 'src/subscription/subscription.service'; // Assuming this path
 
 @Injectable()
 export class InvoiceService {
@@ -22,11 +28,56 @@ export class InvoiceService {
     private userRepo: Repository<User>,
 
     private settingService: SettingService, // ✅ ADD THIS
+
+    private usageService: UsageService, // ✅ ADD THIS
+
+    private subscriptionService: SubscriptionService, // ✅ ADD THIS
   ) {}
 
   async create(body: any, files: any[], user: any) {
-    const products = JSON.parse(body.products);
+    // ===============================
+    // 👤 LOAD USER + ORG
+    // ===============================
+    const userEntity = await this.userRepo.findOne({
+      where: { id: user.sub },
+      relations: ['organization'],
+    });
 
+    if (!userEntity) {
+      throw new NotFoundException('User not found');
+    }
+
+    // ===============================
+    // 🚫 CHECK SUBSCRIPTION STATUS
+    // ===============================
+    const subscription =
+      await this.subscriptionService.getActiveSubscription(user);
+
+    if (!subscription) {
+      throw new ForbiddenException('No active subscription');
+    }
+
+    if (subscription.status === 'pending') {
+      throw new ForbiddenException('Subscription is pending approval');
+    }
+
+    if (subscription.status === 'rejected') {
+      throw new ForbiddenException('Subscription was rejected');
+    }
+
+    if (new Date(subscription.endDate) < new Date()) {
+      throw new ForbiddenException('Subscription expired');
+    }
+
+    // ===============================
+    // 🚫 CHECK LIMIT
+    // ===============================
+    await this.checkInvoiceLimit(user);
+
+    // ===============================
+    // 📦 PROCESS PRODUCTS
+    // ===============================
+    const products = JSON.parse(body.products);
     const baseUrl = process.env.BASE_URL;
 
     const mappedProducts = products.map((p, index) => ({
@@ -34,7 +85,7 @@ export class InvoiceService {
       price: p.price,
       quantity: p.quantity,
       imageUrl: files[index]
-        ? `${baseUrl}/uploads/${files[index].filename}` // ✅ FIXED
+        ? `${baseUrl}/uploads/${files[index].filename}`
         : null,
     }));
 
@@ -43,29 +94,42 @@ export class InvoiceService {
       0,
     );
 
-    body.totalAmount = totalAmount.toString();
-
-    // QR
-    const qrData = `Pay Rs ${body.totalAmount}`;
+    const qrData = `Pay Rs ${totalAmount}`;
     const qrCode = await QRCode.toDataURL(qrData);
 
-    // PDF
     const pdfFileName = await this.generatePDF(body, mappedProducts, qrCode);
 
-    const pdfUrl = `${baseUrl}/uploads/${pdfFileName}`; // ✅ PUBLIC URL
+    const pdfUrl = `${baseUrl}/uploads/${pdfFileName}`;
 
-    const invoice = this.repo.create({
+    // ===============================
+    // 🧾 CREATE INVOICE (FIXED)
+    // ===============================
+    const invoiceData: DeepPartial<Invoice> = {
       customerName: body.customerName || '',
-      date: new Date(body.date),
-      totalAmount: parseFloat(body.totalAmount),
+      date: new Date(body.date).toISOString(),
+      totalAmount,
       products: mappedProducts,
       qrCode,
-      pdfPath: pdfUrl, // ✅ SAVE URL IN DB
-      status: 'pending',
-      user: { id: user.sub },
-    } as any);
+      pdfPath: pdfUrl,
+      status: InvoiceStatus.PENDING,
 
-    return this.repo.save(invoice);
+      user: userEntity,
+      organization: userEntity.organization ?? null,
+    };
+
+    const invoice = this.repo.create(invoiceData);
+
+    const savedInvoice = await this.repo.save(invoice);
+
+    // ===============================
+    // ➕ INCREMENT USAGE (CLEAN)
+    // ===============================
+    await this.usageService.increment(
+      userEntity.organization ? undefined : userEntity.id,
+      userEntity.organization?.id ?? undefined,
+    );
+
+    return savedInvoice;
   }
 
   async generatePDF(body, products, qrCode) {
@@ -341,6 +405,39 @@ export class InvoiceService {
       .select('SUM(invoice.totalAmount)', 'sum')
       .getRawOne();
 
+    // ========================
+    // 📊 USAGE DATA
+    // ========================
+    const subscription =
+      await this.subscriptionService.getActiveSubscription(user);
+
+    let usageData = {};
+
+    if (subscription) {
+      const userEntity = await this.userRepo.findOne({
+        where: { id: user.sub },
+        relations: ['organization'],
+      });
+
+      if (!userEntity) {
+        throw new NotFoundException('User not found');
+      }
+
+      const usage = await this.usageService.getOrCreateUsage(
+        userEntity.organization ? undefined : user.sub,
+        userEntity.organization?.id,
+      );
+
+      usageData = {
+        used: usage.invoiceCount,
+        limit: subscription.plan.invoiceLimit,
+        remaining:
+          subscription.plan.invoiceLimit === -1
+            ? 'unlimited'
+            : subscription.plan.invoiceLimit - usage.invoiceCount,
+      };
+    }
+
     return {
       // 🔹 FILTERED
       totalInvoices,
@@ -361,6 +458,8 @@ export class InvoiceService {
 
       // 🔹 EXTRA
       recentInvoices,
+      // 🔹 USAGE
+      usage: usageData,
     };
   }
 
@@ -752,5 +851,50 @@ export class InvoiceService {
       monthlyChart,
       statusChart,
     };
+  }
+
+  // CHECK INVOICE LIMIT BEFORE CREATING INVOICE
+  async checkInvoiceLimit(user: any) {
+    const subscription =
+      await this.subscriptionService.getActiveSubscription(user);
+
+    if (!subscription) {
+      throw new ForbiddenException('No active subscription');
+    }
+
+    // 🚫 NOT APPROVED
+    if (subscription.status !== 'active') {
+      throw new ForbiddenException('Subscription not approved yet');
+    }
+
+    // ⛔ EXPIRED
+    if (subscription.endDate && new Date() > subscription.endDate) {
+      throw new ForbiddenException('Subscription expired');
+    }
+
+    const plan = subscription.plan;
+
+    // ♾️ unlimited plan
+    if (plan.invoiceLimit === -1) return;
+
+    const userEntity = await this.userRepo.findOne({
+      where: { id: user.sub },
+      relations: ['organization'],
+    });
+
+    if (!userEntity) {
+      throw new NotFoundException('User not found');
+    }
+
+    const usage = await this.usageService.getOrCreateUsage(
+      userEntity.organization ? undefined : user.sub,
+      userEntity.organization?.id,
+    );
+
+    if (usage.invoiceCount >= plan.invoiceLimit) {
+      throw new ForbiddenException(
+        `Invoice limit reached (${plan.invoiceLimit}/month). Upgrade your plan.`,
+      );
+    }
   }
 }

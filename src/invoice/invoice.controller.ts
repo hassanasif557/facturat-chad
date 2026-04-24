@@ -23,11 +23,15 @@ import { InvoiceDashboardFilterDto } from './dto/invoice-dashboard-filter.dto';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
 import { ReportFilterDto } from './dto/report-filter.dto';
 import { InvoiceSearchDto } from './dto/search-invoice.dto';
+import { UsageService } from 'src/usage/usage.service';
 
 @Controller('invoices')
 @UseGuards(SupabaseAuthGuard, RolesGuard)
 export class InvoiceController {
-  constructor(private service: InvoiceService) {}
+  constructor(
+    private service: InvoiceService,
+    private usageService: UsageService,
+  ) {}
 
   // ✅ SINGLE API
   @Post('create')
@@ -114,5 +118,17 @@ export class InvoiceController {
     @Query('endDate') endDate?: string,
   ) {
     return this.service.getAdminReport({ startDate, endDate });
+  }
+
+  @Put('usage/reset/:userId')
+  @Roles('admin')
+  async resetUserUsage(@Param('userId') userId: number) {
+    return this.usageService.resetUsage(userId, undefined);
+  }
+
+  @Put('usage/reset-org/:orgId')
+  @Roles('admin')
+  async resetOrgUsage(@Param('orgId') orgId: number) {
+    return this.usageService.resetUsage(undefined, orgId);
   }
 }

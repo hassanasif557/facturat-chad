@@ -9,6 +9,8 @@ import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Role, User, VerificationStatus } from 'src/user/user.entity';
+import { Subscription } from 'src/subscription/subscription.entity';
+import { Plan } from 'src/plan/plan.entity';
 
 @Injectable()
 export class AuthService {
@@ -17,6 +19,12 @@ export class AuthService {
     private jwtService: JwtService,
     @InjectRepository(User)
     private userRepository: Repository<User>,
+
+    @InjectRepository(Plan)
+    private planRepo: Repository<Plan>,
+
+    @InjectRepository(Subscription)
+    private subRepo: Repository<Subscription>,
   ) {}
 
   // ================= REGISTER =================
@@ -42,10 +50,16 @@ export class AuthService {
       verificationStatus: VerificationStatus.PENDING,
     });
 
+    // 🔥 assign free plan here also
+    await this.userService.assignFreePlan(user);
+
+    // 🔥 reload full relations AFTER assignment
+    const fullProfile = await this.buildUserResponse(user);
+
     const tokens = await this.generateTokens(user);
 
     return {
-      user: this.excludePassword(user),
+      ...fullProfile,
       ...tokens,
     };
   }
@@ -63,8 +77,10 @@ export class AuthService {
 
     const tokens = await this.generateTokens(user);
 
+    const fullProfile = await this.buildUserResponse(user);
+
     return {
-      user: this.excludePassword(user),
+      ...fullProfile,
       ...tokens,
     };
   }
@@ -112,17 +128,20 @@ export class AuthService {
         throw new UnauthorizedException();
       }
 
-      const isMatch = await bcrypt.compare(
-        refreshToken,
-        user.refreshToken,
-      );
+      const isMatch = await bcrypt.compare(refreshToken, user.refreshToken);
 
       if (!isMatch) {
         throw new UnauthorizedException('Invalid refresh token');
       }
 
       // 🔁 ROTATE TOKENS
-      return this.generateTokens(user);
+      const tokens = await this.generateTokens(user);
+      const fullProfile = await this.buildUserResponse(user);
+
+      return {
+        ...fullProfile,
+        ...tokens,
+      };
     } catch (err) {
       throw new UnauthorizedException('Invalid refresh token');
     }
@@ -130,21 +149,53 @@ export class AuthService {
 
   // ================= LOGOUT =================
   async logout(userId: number) {
-  if (!userId) {
-    throw new UnauthorizedException('Invalid user');
+    if (!userId) {
+      throw new UnauthorizedException('Invalid user');
+    }
+
+    await this.userRepository.update({ id: userId }, { refreshToken: '' });
+
+    return { message: 'Logged out successfully' };
   }
-
-  await this.userRepository.update(
-    { id: userId },
-    { refreshToken: '' },
-  );
-
-  return { message: 'Logged out successfully' };
-}
 
   // ================= HELPER =================
   excludePassword(user: User) {
     const { password, refreshToken, ...safeUser } = user;
     return safeUser;
+  }
+
+  // ================= USER FULL PROFILE =================
+  private async buildUserResponse(user: User) {
+    const fullUser = await this.userRepository.findOne({
+      where: { id: user.id },
+      relations: ['organization'],
+    });
+
+    if (!fullUser) return null;
+
+    const subscription = await this.subRepo.findOne({
+      where: {
+        user: { id: user.id },
+      },
+      relations: ['plan', 'organization'],
+      order: { id: 'DESC' },
+    });
+
+    return {
+      user: this.excludePassword(fullUser),
+
+      organization: fullUser.organization || null,
+
+      subscription: subscription || null,
+
+      plan: subscription?.plan || null,
+
+      usage: {
+        invoicesUsed: 0, // 🔥 replace later from UsageService
+        userUsed: 0,
+      },
+
+      subscriptionHistory: [], // 🔥 add later if needed
+    };
   }
 }

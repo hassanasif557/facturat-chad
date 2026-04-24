@@ -1,4 +1,12 @@
-import { Entity, PrimaryGeneratedColumn, Column, UpdateDateColumn, CreateDateColumn } from 'typeorm';
+import { Organization } from 'src/organization/organization.entity';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  UpdateDateColumn,
+  CreateDateColumn,
+  ManyToOne,
+} from 'typeorm';
 
 export enum Role {
   ADMIN = 'admin',
@@ -9,6 +17,13 @@ export enum VerificationStatus {
   VERIFIED = 'verified',
   PENDING = 'pending',
   NOT_VERIFIED = 'not_verified',
+}
+
+// ✅ NEW ENUM for organization roles
+export enum OrgRole {
+  OWNER = 'owner',
+  STAFF = 'staff',
+  USER = 'user',
 }
 
 @Entity()
@@ -31,6 +46,7 @@ export class User {
   @Column()
   tax_number!: string;
 
+  // ✅ SYSTEM ROLE (admin / user)
   @Column({
     type: 'enum',
     enum: Role,
@@ -38,6 +54,7 @@ export class User {
   })
   role!: Role;
 
+  // ✅ VERIFICATION
   @Column({
     type: 'enum',
     enum: VerificationStatus,
@@ -45,14 +62,28 @@ export class User {
   })
   verificationStatus!: VerificationStatus;
 
-  // ✅ NEW FIELD for refresh tokens
   @Column({ nullable: true })
   refreshToken!: string;
 
-   // ✅ NEW
+  // ✅ TIMESTAMPS
   @CreateDateColumn()
   createdAt!: Date;
 
   @UpdateDateColumn()
   updatedAt!: Date;
+
+  // ===============================
+  // 🏢 ORGANIZATION (TEAM FEATURE)
+  // ===============================
+
+  @ManyToOne(() => Organization, { nullable: true })
+  organization!: Organization | null;
+
+  // ✅ SEPARATE FIELD (IMPORTANT)
+  @Column({
+    type: 'enum',
+    enum: OrgRole,
+    nullable: true,
+  })
+  orgRole!: OrgRole;
 }
