@@ -68,6 +68,12 @@ export class InvoiceController {
     return this.service.search(query);
   }
 
+  @Get('my/search')
+  @Roles('user')
+  searchMyInvoices(@Query() query: InvoiceSearchDto, @Req() req) {
+    return this.service.searchForUser(query, req.user);
+  }
+
   @Put(':id')
   @Roles('admin')
   update(@Param('id') id: number, @Body() body: any) {

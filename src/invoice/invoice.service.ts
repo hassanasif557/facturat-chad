@@ -276,6 +276,92 @@ export class InvoiceService {
     };
   }
 
+  //search for user's own invoices
+  async searchForUser(query: InvoiceSearchDto, currentUser: any) {
+    const {
+      id,
+      name, // 🔥 this will be customerName
+      startDate,
+      endDate,
+      minPrice,
+      maxPrice,
+      status,
+      page = 1,
+      limit = 10,
+    } = query;
+
+    const userEntity = await this.userRepo.findOne({
+      where: { id: currentUser.sub },
+      relations: ['organization'],
+    });
+
+    if (!userEntity) {
+      throw new NotFoundException('User not found');
+    }
+
+    const qb = this.repo.createQueryBuilder('invoice');
+
+    // ===============================
+    // 🔒 DATA ACCESS CONTROL
+    // ===============================
+    if (userEntity.organization) {
+      qb.andWhere('invoice.organizationId = :orgId', {
+        orgId: userEntity.organization.id,
+      });
+    } else {
+      qb.andWhere('invoice.userId = :userId', {
+        userId: currentUser.sub,
+      });
+    }
+
+    // ===============================
+    // 🔍 FILTERS
+    // ===============================
+
+    if (id) {
+      qb.andWhere('invoice.id = :id', { id });
+    }
+
+    // 🔥 MAIN CHANGE (customer name instead of user name)
+    if (name) {
+      qb.andWhere('invoice.customerName ILIKE :name', {
+        name: `%${name}%`,
+      });
+    }
+
+    if (startDate && endDate) {
+      qb.andWhere('invoice.date BETWEEN :start AND :end', {
+        start: startDate,
+        end: endDate,
+      });
+    }
+
+    if (minPrice !== undefined && maxPrice !== undefined) {
+      qb.andWhere('invoice.totalAmount BETWEEN :min AND :max', {
+        min: minPrice,
+        max: maxPrice,
+      });
+    }
+
+    if (status) {
+      qb.andWhere('invoice.status = :status', { status });
+    }
+
+    qb.orderBy('invoice.id', 'DESC');
+
+    const [data, total] = await qb
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
+
+    return {
+      data,
+      total,
+      page,
+      lastPage: Math.ceil(total / limit),
+    };
+  }
+
   async update(id: number, body: any) {
     const invoice = await this.repo.findOne({
       where: { id },
