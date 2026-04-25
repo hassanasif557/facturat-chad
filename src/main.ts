@@ -16,7 +16,7 @@ async function bootstrap() {
   // });
 
   app.enableCors({
-    origin: [process.env.BASE_URL_PROD, 'https://www.figma.com', 'https://facturat-chad.onrender.com'],
+    origin: [process.env.BASE_URL_PROD, 'https://www.figma.com', 'http://localhost:5173'],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],
     credentials: false,
