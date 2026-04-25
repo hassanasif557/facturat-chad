@@ -197,55 +197,214 @@ export class SubscriptionService {
     }
   }
 
-  // async getUsage(user: any) {
-  //   const userEntity = await this.userRepo.findOne({
-  //     where: { id: user.sub },
-  //     relations: ['organization'],
-  //   });
+  async getAllSubscriptions(query: any) {
+    const { status, page = 1, limit = 10 } = query;
 
-  //   if (!userEntity) {
-  //     throw new NotFoundException('User not found');
-  //   }
+    const qb = this.subRepo
+      .createQueryBuilder('sub')
+      .leftJoinAndSelect('sub.user', 'user')
+      .leftJoinAndSelect('sub.organization', 'org')
+      .leftJoinAndSelect('sub.plan', 'plan');
 
-  //   // 🔹 get active subscription
-  //   const subscription = await this.getActiveSubscription(user);
+    // 🔍 FILTER BY STATUS
+    if (status) {
+      qb.andWhere('sub.status = :status', { status });
+    }
 
-  //   if (!subscription) {
-  //     throw new NotFoundException('No active subscription');
-  //   }
+    qb.orderBy('sub.id', 'DESC');
 
-  //   const plan = subscription.plan;
+    const [subs, total] = await qb
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
 
-  //   // 🔹 count invoices (monthly)
-  //   const startOfMonth = new Date();
-  //   startOfMonth.setDate(1);
-  //   startOfMonth.setHours(0, 0, 0, 0);
+    // ===============================
+    // 📊 ADD USAGE DATA
+    // ===============================
 
-  //   let count = 0;
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
 
-  //   if (userEntity.organization) {
-  //     count = await this.invoiceRepo.count({
-  //       where: {
-  //         organization: { id: userEntity.organization.id },
-  //         createdAt: MoreThan(startOfMonth),
-  //       },
-  //     });
-  //   } else {
-  //     count = await this.invoiceRepo.count({
-  //       where: {
-  //         user: { id: user.sub },
-  //         createdAt: MoreThan(startOfMonth),
-  //       },
-  //     });
-  //   }
+    const data = await Promise.all(
+      subs.map(async (sub) => {
+        let used = 0;
 
-  //   return {
-  //     used: count,
-  //     limit: plan.invoiceLimit === -1 ? 'unlimited' : plan.invoiceLimit,
-  //     remaining:
-  //       plan.invoiceLimit === -1
-  //         ? 'unlimited'
-  //         : Math.max(plan.invoiceLimit - count, 0),
-  //   };
-  // }
+        if (sub.organization) {
+          used = await this.invoiceRepo.count({
+            where: {
+              organization: { id: sub.organization.id },
+              createdAt: MoreThan(startOfMonth),
+            },
+          });
+        } else if (sub.user) {
+          used = await this.invoiceRepo.count({
+            where: {
+              user: { id: sub.user.id },
+              createdAt: MoreThan(startOfMonth),
+            },
+          });
+        }
+
+        return {
+          id: sub.id,
+          status: sub.status,
+          isActive: sub.isActive,
+
+          startDate: sub.startDate,
+          endDate: sub.endDate,
+
+          plan: sub.plan,
+
+          user: sub.user
+            ? {
+                id: sub.user.id,
+                name: sub.user.name,
+                email: sub.user.email,
+              }
+            : null,
+
+          organization: sub.organization
+            ? {
+                id: sub.organization.id,
+                name: sub.organization.name,
+              }
+            : null,
+
+          usage: {
+            used,
+            limit: sub.plan.invoiceLimit,
+            remaining:
+              sub.plan.invoiceLimit === -1
+                ? 'unlimited'
+                : sub.plan.invoiceLimit - used,
+          },
+        };
+      }),
+    );
+
+    return {
+      data,
+      total,
+      page,
+      lastPage: Math.ceil(total / limit),
+    };
+  }
+
+  async getSubscriptionStats() {
+    // ===============================
+    // 📊 BASIC COUNTS
+    // ===============================
+
+    const [active, pending, rejected] = await Promise.all([
+      this.subRepo.count({
+        where: { status: SubscriptionStatus.ACTIVE },
+      }),
+      this.subRepo.count({
+        where: { status: SubscriptionStatus.PENDING },
+      }),
+      this.subRepo.count({
+        where: { status: SubscriptionStatus.REJECTED },
+      }),
+    ]);
+
+    // ===============================
+    // 🔁 RECURRING LOGIC
+    // ===============================
+
+    const allSubs = await this.subRepo.find({
+      relations: ['user', 'organization', 'plan'],
+    });
+
+    const map = new Map<string, number>();
+
+    for (const sub of allSubs) {
+      const key = sub.organization
+        ? `org-${sub.organization.id}`
+        : `user-${sub.user?.id}`;
+
+      if (!key) continue;
+
+      map.set(key, (map.get(key) || 0) + 1);
+    }
+
+    const totalEntities = map.size;
+
+    let repeatSubscribers = 0;
+    let totalSubscriptions = 0;
+
+    map.forEach((count) => {
+      totalSubscriptions += count;
+      if (count > 1) repeatSubscribers++;
+    });
+
+    const avgSubscriptionsPerUser =
+      totalEntities === 0 ? 0 : totalSubscriptions / totalEntities;
+
+    const retentionRate =
+      totalEntities === 0 ? 0 : (repeatSubscribers / totalEntities) * 100;
+
+    // ===============================
+    // 🧠 PLAN-WISE STATS
+    // ===============================
+
+    const planStatsMap = new Map<
+      number,
+      {
+        name: string;
+        total: number;
+        active: number;
+        pending: number;
+        rejected: number;
+      }
+    >();
+
+    for (const sub of allSubs) {
+      const planId = sub.plan.id;
+
+      if (!planStatsMap.has(planId)) {
+        planStatsMap.set(planId, {
+          name: sub.plan.name,
+          total: 0,
+          active: 0,
+          pending: 0,
+          rejected: 0,
+        });
+      }
+
+      const stats = planStatsMap.get(planId)!;
+
+      stats.total++;
+
+      if (sub.status === SubscriptionStatus.ACTIVE) stats.active++;
+      if (sub.status === SubscriptionStatus.PENDING) stats.pending++;
+      if (sub.status === SubscriptionStatus.REJECTED) stats.rejected++;
+    }
+
+    const planWise = Array.from(planStatsMap.values());
+
+    // ===============================
+    // 📊 FINAL RESPONSE
+    // ===============================
+
+    return {
+      counts: {
+        active,
+        pending,
+        rejected,
+      },
+
+      recurring: {
+        totalEntities,
+        repeatSubscribers,
+        avgSubscriptionsPerUser: Number(avgSubscriptionsPerUser.toFixed(2)),
+      },
+
+      retention: {
+        retentionRate: Number(retentionRate.toFixed(2)),
+      },
+
+      planWise, // 🔥 NEW SECTION
+    };
+  }
 }

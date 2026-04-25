@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User, VerificationStatus } from './user.entity';
@@ -30,9 +34,9 @@ export class UserService {
 
   // 🔐 Helper
 
-    // ==============================
-    // ⚡ AUTO ASSIGN FREE PLAN
-    // ==============================
+  // ==============================
+  // ⚡ AUTO ASSIGN FREE PLAN
+  // ==============================
   public async assignFreePlan(user: User) {
     const freePlan = await this.planRepo.findOne({
       where: { name: 'Free' },
@@ -60,7 +64,6 @@ export class UserService {
   async create(dto: CreateUserDto): Promise<UserProfileResponse> {
     const user = this.userRepository.create(dto);
     const saved = await this.userRepository.save(user);
-
 
     // 🔥 assign free plan
     await this.assignFreePlan(saved);
@@ -184,5 +187,119 @@ export class UserService {
         userUsed: 0,
       },
     };
+  }
+
+  async search(query: any) {
+    const {
+      name,
+      email,
+      phone,
+      tax_number,
+      orgRole,
+      verificationStatus,
+      createdFrom,
+      createdTo,
+      updatedFrom,
+      updatedTo,
+      page = 1,
+      limit = 10,
+    } = query;
+
+    const qb = this.userRepository
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.organization', 'organization');
+
+    // ================= FILTERS =================
+
+    if (name) {
+      qb.andWhere('user.name ILIKE :name', {
+        name: `%${name}%`,
+      });
+    }
+
+    if (email) {
+      qb.andWhere('user.email ILIKE :email', {
+        email: `%${email}%`,
+      });
+    }
+
+    if (phone) {
+      qb.andWhere('user.phone ILIKE :phone', {
+        phone: `%${phone}%`,
+      });
+    }
+
+    if (tax_number) {
+      qb.andWhere('user.tax_number ILIKE :tax', {
+        tax: `%${tax_number}%`,
+      });
+    }
+
+    if (orgRole) {
+      qb.andWhere('user.orgRole = :orgRole', { orgRole });
+    }
+
+    if (verificationStatus) {
+      qb.andWhere('user.verificationStatus = :status', {
+        status: verificationStatus,
+      });
+    }
+
+    if (createdFrom && createdTo) {
+      qb.andWhere('user.createdAt BETWEEN :from AND :to', {
+        from: createdFrom,
+        to: createdTo,
+      });
+    }
+
+    if (updatedFrom && updatedTo) {
+      qb.andWhere('user.updatedAt BETWEEN :from2 AND :to2', {
+        from2: updatedFrom,
+        to2: updatedTo,
+      });
+    }
+
+    qb.orderBy('user.id', 'DESC');
+
+    const [users, total] = await qb
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
+
+    const data = await Promise.all(users.map((u) => this.buildUserProfile(u)));
+
+    return {
+      data,
+      total,
+      page,
+      lastPage: Math.ceil(total / limit),
+    };
+  }
+
+  async applyForVerification(user): Promise<User> {
+    const existing = await this.userRepository.findOne({
+      where: { id: user.sub },
+    });
+
+    if (!existing) {
+      throw new NotFoundException('User not found');
+    }
+
+    // ❌ Already verified
+    if (existing.verificationStatus === VerificationStatus.VERIFIED) {
+      throw new BadRequestException('Already verified');
+    }
+
+    // ❌ Already applied
+    if (existing.verificationStatus === VerificationStatus.PENDING) {
+      throw new BadRequestException('Verification already in progress');
+    }
+
+    // ✅ APPLY
+    existing.verificationStatus = VerificationStatus.PENDING;
+
+    const saved = await this.userRepository.save(existing);
+
+    return this.excludePassword(saved) as User;
   }
 }

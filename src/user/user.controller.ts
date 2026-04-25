@@ -19,6 +19,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UpdateVerificationDto } from './dto/update-verification.dto';
+import { UserSearchDto } from './dto/user-search.dto';
 
 @Controller('users')
 export class UserController {
@@ -42,6 +43,13 @@ export class UserController {
 
   @UseGuards(SupabaseAuthGuard, RolesGuard)
   @Roles('admin')
+  @Get('search')
+  search(@Query() query: UserSearchDto) {
+    return this.userService.search(query);
+  }
+
+  @UseGuards(SupabaseAuthGuard, RolesGuard)
+  @Roles('admin')
   @Get(':id')
   findOne(@Param('id') id: number) {
     return this.userService.findOne(id);
@@ -50,10 +58,7 @@ export class UserController {
   @UseGuards(SupabaseAuthGuard, RolesGuard)
   @Roles('admin')
   @Put(':id')
-  updateUser(
-    @Param('id') id: number,
-    @Body() body: UpdateUserDto,
-  ) {
+  updateUser(@Param('id') id: number, @Body() body: UpdateUserDto) {
     return this.userService.update(id, body);
   }
 
@@ -64,7 +69,12 @@ export class UserController {
     @Param('id') id: number,
     @Body() body: UpdateVerificationDto,
   ) {
-    console.log('Received request to update verification status for user', id, 'to', body.verificationStatus);
+    console.log(
+      'Received request to update verification status for user',
+      id,
+      'to',
+      body.verificationStatus,
+    );
     return this.userService.updateVerificationStatus(
       id,
       body.verificationStatus,
@@ -99,5 +109,12 @@ export class UserController {
   @Delete('me')
   deleteMe(@Req() req) {
     return this.userService.deleteMe(req.user);
+  }
+
+  @UseGuards(SupabaseAuthGuard, RolesGuard)
+  @Roles('admin', 'user')
+  @Post('apply-verification')
+  applyVerification(@Req() req) {
+    return this.userService.applyForVerification(req.user);
   }
 }

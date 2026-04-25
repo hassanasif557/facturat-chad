@@ -47,7 +47,7 @@ export class AuthService {
       ...data,
       password: hashedPassword,
       role: Role.USER,
-      verificationStatus: VerificationStatus.PENDING,
+      verificationStatus: VerificationStatus.NOT_VERIFIED,
     });
 
     // 🔥 assign free plan here also

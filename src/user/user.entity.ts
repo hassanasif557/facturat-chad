@@ -58,7 +58,7 @@ export class User {
   @Column({
     type: 'enum',
     enum: VerificationStatus,
-    default: VerificationStatus.PENDING,
+    default: VerificationStatus.NOT_VERIFIED,
   })
   verificationStatus!: VerificationStatus;
 

@@ -7,6 +7,7 @@ import {
   Put,
   Param,
   Get,
+  Query,
 } from '@nestjs/common';
 import { SubscriptionService } from './subscription.service';
 import { SupabaseAuthGuard } from 'src/auth/supabase-auth/supabase-auth.guard';
@@ -55,5 +56,17 @@ export class SubscriptionController {
   @Roles('admin')
   getRequests() {
     return this.service.getPendingRequests();
+  }
+
+  @Get('all')
+  @Roles('admin')
+  getAll(@Query() query: any) {
+    return this.service.getAllSubscriptions(query);
+  }
+
+  @Get('stats')
+  @Roles('admin')
+  getStats() {
+    return this.service.getSubscriptionStats();
   }
 }
