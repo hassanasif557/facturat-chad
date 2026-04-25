@@ -7,13 +7,20 @@ import * as path from 'path'; // ✅ FIXED
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  //   app.enableCors({
+  //   origin: [
+  //     process.env.BASE_URL_PROD,
+  //     'https://www.figma.com',
+  //   ],
+  //   credentials: true,
+  // });
+
   app.enableCors({
-  origin: [
-    process.env.BASE_URL_PROD,
-    'https://www.figma.com',
-  ],
-  credentials: true,
-});
+    origin: [process.env.BASE_URL_PROD, 'https://www.figma.com', 'https://facturat-chad.onrender.com'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],
+    credentials: false,
+  });
 
   // ✅ Global validation
   app.useGlobalPipes(new ValidationPipe());
