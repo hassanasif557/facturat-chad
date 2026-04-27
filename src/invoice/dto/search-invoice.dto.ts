@@ -21,6 +21,10 @@ export class InvoiceSearchDto {
   name?: string;
 
   @IsOptional()
+  @IsString()
+  customerName?: string;
+
+  @IsOptional()
   startDate?: string;
 
   @IsOptional()

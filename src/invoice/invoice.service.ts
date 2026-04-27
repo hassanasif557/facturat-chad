@@ -220,6 +220,7 @@ export class InvoiceService {
     const {
       id,
       name,
+      customerName,
       startDate,
       endDate,
       minPrice,
@@ -240,6 +241,12 @@ export class InvoiceService {
     if (name) {
       qb.andWhere('user.name ILIKE :name', {
         name: `%${name}%`,
+      });
+    }
+
+    if (customerName) {
+      qb.andWhere('invoice.customerName ILIKE :customerName', {
+        customerName: `%${customerName}%`,
       });
     }
 
