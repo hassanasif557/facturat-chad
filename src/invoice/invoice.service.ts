@@ -248,11 +248,28 @@ export class InvoiceService {
         start: startDate,
         end: endDate,
       });
+    } else if (startDate) {
+      qb.andWhere('invoice.date >= :start', {
+        start: startDate,
+      });
+    } else if (endDate) {
+      qb.andWhere('invoice.date <= :end', {
+        end: endDate,
+      });
     }
 
+    // 💰 PRICE FILTER (FIXED)
     if (minPrice !== undefined && maxPrice !== undefined) {
       qb.andWhere('invoice.totalAmount BETWEEN :min AND :max', {
         min: minPrice,
+        max: maxPrice,
+      });
+    } else if (minPrice !== undefined) {
+      qb.andWhere('invoice.totalAmount >= :min', {
+        min: minPrice,
+      });
+    } else if (maxPrice !== undefined) {
+      qb.andWhere('invoice.totalAmount <= :max', {
         max: maxPrice,
       });
     }
@@ -334,11 +351,28 @@ export class InvoiceService {
         start: startDate,
         end: endDate,
       });
+    } else if (startDate) {
+      qb.andWhere('invoice.date >= :start', {
+        start: startDate,
+      });
+    } else if (endDate) {
+      qb.andWhere('invoice.date <= :end', {
+        end: endDate,
+      });
     }
 
+    // 💰 PRICE FILTER (FIXED)
     if (minPrice !== undefined && maxPrice !== undefined) {
       qb.andWhere('invoice.totalAmount BETWEEN :min AND :max', {
         min: minPrice,
+        max: maxPrice,
+      });
+    } else if (minPrice !== undefined) {
+      qb.andWhere('invoice.totalAmount >= :min', {
+        min: minPrice,
+      });
+    } else if (maxPrice !== undefined) {
+      qb.andWhere('invoice.totalAmount <= :max', {
         max: maxPrice,
       });
     }
