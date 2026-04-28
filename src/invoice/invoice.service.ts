@@ -97,7 +97,12 @@ export class InvoiceService {
     const qrData = `Pay Rs ${totalAmount}`;
     const qrCode = await QRCode.toDataURL(qrData);
 
-    const pdfFileName = await this.generatePDF(body, mappedProducts, qrCode);
+    const pdfFileName = await this.generatePDF(
+      body,
+      mappedProducts,
+      qrCode,
+      userEntity,
+    );
 
     const pdfUrl = `${baseUrl}/uploads/${pdfFileName}`;
 
@@ -132,46 +137,94 @@ export class InvoiceService {
     return savedInvoice;
   }
 
-  async generatePDF(body, products, qrCode) {
+  async generatePDF(body, products, qrCode, merchant) {
     const fileName = `invoice-${Date.now()}.pdf`;
 
-    // ✅ ALWAYS correct root path
     const uploadPath = path.join(process.cwd(), 'uploads');
 
-    // ✅ ensure folder exists
     if (!fs.existsSync(uploadPath)) {
       fs.mkdirSync(uploadPath, { recursive: true });
     }
 
     const filePath = path.join(uploadPath, fileName);
 
-    const doc = new PDFDocument();
+    const doc = new PDFDocument({ margin: 50 });
     const stream = fs.createWriteStream(filePath);
 
     doc.pipe(stream);
 
-    doc.fontSize(20).text('INVOICE', { align: 'center' });
+    // =========================
+    // 🏢 HEADER (MERCHANT INFO)
+    // =========================
+    doc
+      .fontSize(18)
+      .text(merchant.organization?.name || merchant.name, { bold: true });
+
+    doc.fontSize(10);
+    doc.text(`Email: ${merchant.email}`);
+    doc.text(`Phone: ${merchant.phone}`);
+    doc.text(`Tax No: ${merchant.tax_number || 'N/A'}`);
 
     doc.moveDown();
-    doc.text(`Customer: ${body.customerName}`);
-    doc.text(`Date: ${body.date}`);
-    doc.text(`Total: Rs ${body.totalAmount}`);
+
+    // =========================
+    // 🧾 INVOICE TITLE
+    // =========================
+    doc.fontSize(20).text('INVOICE', { align: 'right' });
+
+    doc.fontSize(10);
+    doc.text(`Invoice #: ${body.invoiceNumber}`, { align: 'right' });
+    doc.text(`Date: ${body.date}`, { align: 'right' });
 
     doc.moveDown();
-    doc.text('Products:', { underline: true });
+
+    // =========================
+    // 👤 CUSTOMER INFO
+    // =========================
+    doc.fontSize(12).text('Bill To:', { underline: true });
+    doc.fontSize(10).text(body.customerName);
+
+    doc.moveDown();
+
+    // =========================
+    // 📦 PRODUCTS TABLE
+    // =========================
+    doc.fontSize(12).text('Items', { underline: true });
+
+    doc.moveDown(0.5);
 
     products.forEach((p, i) => {
-      doc.text(
-        `${i + 1}. ${p.name} | Qty: ${p.quantity} | Price: Rs ${p.price} | Total: Rs ${p.price * p.quantity}`,
-      );
+      doc
+        .fontSize(10)
+        .text(
+          `${String(i + 1).padEnd(3)} ${p.name.padEnd(20)} | Qty: ${String(p.quantity).padEnd(15)} | Unit: Rs ${String(p.price).padEnd(15)} | Total: Rs ${p.price * p.quantity}`,
+        )
+        .moveDown();
     });
 
-    // QR
+    // =========================
+    // 💰 TOTAL
+    // =========================
+    doc.moveDown();
+
+    doc.fontSize(14).text(`Total Amount: Rs ${body.totalAmount}`, {
+      align: 'right',
+    });
+
+    // =========================
+    // 🔳 QR CODE
+    // =========================
     const qrImage = qrCode.replace(/^data:image\/png;base64,/, '');
     const qrBuffer = Buffer.from(qrImage, 'base64');
 
     doc.moveDown();
-    doc.image(qrBuffer, { fit: [100, 100], align: 'center' });
+    doc.image(qrBuffer, 400, doc.y, { fit: [100, 100] });
+
+    // =========================
+    // 📌 FOOTER
+    // =========================
+    doc.moveDown(2);
+    doc.fontSize(10).text('Thank you for your business!', { align: 'center' });
 
     doc.end();
 
