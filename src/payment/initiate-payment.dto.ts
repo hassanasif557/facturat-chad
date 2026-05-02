@@ -8,6 +8,9 @@ export class InitiatePaymentDto {
   @IsNumber()
   paymentMethodId?: number; // 🔥 NEW
 
+  @IsNumber()
+  paymentOptionId?: number; // 🔥 NEW
+
   @IsEnum(PaymentProvider)
   provider?: PaymentProvider;
 
