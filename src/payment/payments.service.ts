@@ -46,154 +46,178 @@ export class PaymentsService {
   // 🚀 INITIATE PAYMENT
   // ======================================================
   async initiatePayment(user: any, dto: InitiatePaymentDto) {
-    const invoice = await this.invoiceRepo.findOne({
-      where: { id: dto.invoice_id },
-      relations: ['user', 'organization'],
-    });
-
-    if (!invoice) throw new NotFoundException('Invoice not found');
-
-    if (invoice.user.id !== user.sub) {
-      throw new ForbiddenException('Not your invoice');
-    }
-
-    if (invoice.status === InvoiceStatus.PAID) {
-      throw new BadRequestException('Invoice already paid');
-    }
-
-    // ===============================
-    // 💳 GET PAYMENT OPTION
-    // ===============================
-    const option = await this.paymentOptionRepo.findOne({
-      where: { id: dto.paymentOptionId, isActive: true },
-    });
-
-    if (!option) {
-      throw new NotFoundException('Payment option not available');
-    }
-
-    // ===============================
-    // 💰 COMMISSION
-    // ===============================
-    const commission = invoice.totalAmount * 0.02;
-
-    // ===============================
-    // ❌ PREVENT DUPLICATE PAYMENT
-    // ===============================
-    const existingTx = await this.txRepo.findOne({
-      where: {
-        invoice: { id: invoice.id },
-        status: TransactionStatus.PENDING,
-      },
-    });
-
-    if (existingTx) {
-      throw new BadRequestException('Payment already in progress');
-    }
-
-    // ======================================================
-    // 💵 CASH FLOW
-    // ======================================================
-    if (option.type === PaymentOptionType.CASH) {
-      invoice.status = InvoiceStatus.PAID;
-      await this.invoiceRepo.save(invoice);
-
-      const tx = this.txRepo.create({
-        transactionId: 'TXN-' + Date.now(),
-        user: invoice.user,
-        invoice,
-        customerName: invoice.customerName,
-        amount: invoice.totalAmount,
-        commission,
-        paymentType: PaymentType.CASH,
-        status: TransactionStatus.SUCCESS,
+    try {
+      // ===============================
+      // 📄 GET INVOICE
+      // ===============================
+      const invoice = await this.invoiceRepo.findOne({
+        where: { id: dto.invoice_id },
+        relations: ['user', 'organization'],
       });
 
-      await this.txRepo.save(tx);
+      if (!invoice) throw new NotFoundException('Invoice not found');
 
-      return { message: 'Marked as paid (cash)' };
-    }
-
-    // ======================================================
-    // 📲 MOBILE MONEY FLOW
-    // ======================================================
-    if (option.type === PaymentOptionType.MOBILE_MONEY) {
-      if (!dto.paymentMethodId || !dto.customer_phone) {
-        throw new BadRequestException(
-          'paymentMethodId and customer_phone are required',
-        );
+      if (!invoice.user) {
+        throw new BadRequestException('Invoice has no owner');
       }
 
-      const method = await this.paymentMethodRepo.findOne({
+      if (invoice.user.id !== user.sub) {
+        throw new ForbiddenException('Not your invoice');
+      }
+
+      if (invoice.status === InvoiceStatus.PAID) {
+        throw new BadRequestException('Invoice already paid');
+      }
+
+      // ===============================
+      // 💳 GET PAYMENT OPTION
+      // ===============================
+      const option = await this.paymentOptionRepo.findOne({
+        where: { id: dto.paymentOptionId, isActive: true },
+      });
+
+      if (!option) {
+        throw new NotFoundException('Payment option not available');
+      }
+
+      // ===============================
+      // 💰 COMMISSION
+      // ===============================
+      const commission = invoice.totalAmount * 0.02;
+
+      // ===============================
+      // ❌ PREVENT DUPLICATE (SAFE)
+      // ===============================
+      const existingTx = await this.txRepo.findOne({
         where: {
-          id: dto.paymentMethodId,
-          user: { id: user.sub },
+          invoice: { id: invoice.id },
+          status: TransactionStatus.PENDING,
         },
       });
 
-      if (!method) {
-        throw new NotFoundException('Payment method not found');
+      if (existingTx) {
+        throw new BadRequestException('Payment already in progress');
       }
 
-      if (!method.isActive) {
-        throw new ForbiddenException('Payment method is inactive');
+      // ===============================
+      // 🔑 UNIQUE TRANSACTION ID
+      // ===============================
+      const transactionId = `TXN-${Date.now()}-${Math.floor(
+        Math.random() * 1000,
+      )}`;
+
+      // ======================================================
+      // 💵 CASH FLOW
+      // ======================================================
+      if (option.type === PaymentOptionType.CASH) {
+        invoice.status = InvoiceStatus.PAID;
+        await this.invoiceRepo.save(invoice);
+
+        const tx = this.txRepo.create({
+          transactionId,
+          user: invoice.user,
+          invoice,
+          customerName: invoice.customerName,
+          amount: invoice.totalAmount,
+          commission,
+          paymentType: PaymentType.CASH,
+          status: TransactionStatus.SUCCESS,
+        });
+
+        await this.txRepo.save(tx);
+
+        return { message: 'Marked as paid (cash)' };
       }
 
-      if (method.provider !== dto.provider) {
-        throw new ForbiddenException(
-          `Selected method is ${method.provider}, not ${dto.provider}`,
-        );
+      // ======================================================
+      // 📲 MOBILE MONEY FLOW
+      // ======================================================
+      if (option.type === PaymentOptionType.MOBILE_MONEY) {
+        if (!dto.paymentMethodId) {
+          throw new BadRequestException('paymentMethodId is required');
+        }
+
+        if (!dto.customer_phone) {
+          throw new BadRequestException('customer_phone is required');
+        }
+
+        if (!dto.provider) {
+          throw new BadRequestException('provider is required');
+        }
+
+        const method = await this.paymentMethodRepo.findOne({
+          where: {
+            id: dto.paymentMethodId,
+            user: { id: user.sub },
+          },
+        });
+
+        if (!method) {
+          throw new NotFoundException('Payment method not found');
+        }
+
+        if (!method.isActive) {
+          throw new ForbiddenException('Payment method is inactive');
+        }
+
+        if (method.provider !== dto.provider) {
+          throw new ForbiddenException(
+            `Selected method is ${method.provider}, not ${dto.provider}`,
+          );
+        }
+
+        const tx = this.txRepo.create({
+          transactionId,
+          user: invoice.user,
+          invoice,
+          customerName: invoice.customerName,
+          amount: invoice.totalAmount,
+          commission,
+          paymentType: PaymentType.MOBILE_MONEY,
+          provider: method.provider,
+          customerPhone: dto.customer_phone,
+          status: TransactionStatus.PENDING,
+        });
+
+        const saved = await this.txRepo.save(tx);
+
+        return {
+          message: 'Mobile money payment initiated (mock)',
+          transactionId: saved.transactionId,
+          status: saved.status,
+        };
       }
 
-      const tx = this.txRepo.create({
-        transactionId: 'TXN-' + Date.now(),
-        user: invoice.user,
-        invoice,
-        customerName: invoice.customerName,
-        amount: invoice.totalAmount,
-        commission,
-        paymentType: PaymentType.MOBILE_MONEY,
-        provider: method.provider,
-        customerPhone: dto.customer_phone,
-        status: TransactionStatus.PENDING,
-      });
+      // ======================================================
+      // 🔗 PAYMENT LINK FLOW
+      // ======================================================
+      if (option.type === PaymentOptionType.PAYMENT_LINK) {
+        const tx = this.txRepo.create({
+          transactionId,
+          user: invoice.user,
+          invoice,
+          customerName: invoice.customerName,
+          amount: invoice.totalAmount,
+          commission,
+          paymentType: PaymentType.PAYMENT_LINK,
+          status: TransactionStatus.PENDING,
+        });
 
-      const saved = await this.txRepo.save(tx);
+        const saved = await this.txRepo.save(tx);
 
-      return {
-        message: 'Mobile money payment initiated (mock)',
-        transactionId: saved.transactionId,
-        status: saved.status,
-      };
+        const link = `${process.env.BASE_URL}/pay/${saved.transactionId}`;
+
+        return {
+          message: 'Payment link generated',
+          link,
+          transactionId: saved.transactionId,
+        };
+      }
+
+      throw new BadRequestException('Invalid payment option');
+    } catch (error) {
+      console.error('❌ Payment initiate error:', error);
     }
-
-    // ======================================================
-    // 🔗 PAYMENT LINK FLOW
-    // ======================================================
-    if (option.type === PaymentOptionType.PAYMENT_LINK) {
-      const tx = this.txRepo.create({
-        transactionId: 'TXN-' + Date.now(),
-        user: invoice.user,
-        invoice,
-        customerName: invoice.customerName,
-        amount: invoice.totalAmount,
-        commission,
-        paymentType: PaymentType.PAYMENT_LINK,
-        status: TransactionStatus.PENDING,
-      });
-
-      const saved = await this.txRepo.save(tx);
-
-      const link = `${process.env.BASE_URL}/pay/${saved.transactionId}`;
-
-      return {
-        message: 'Payment link generated',
-        link,
-        transactionId: saved.transactionId,
-      };
-    }
-
-    throw new BadRequestException('Invalid payment option');
   }
 
   // ======================================================
