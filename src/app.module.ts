@@ -17,6 +17,7 @@ import { UsageModule } from './usage/usage.module';
 import { PaymentMethodModule } from './payment_method/payment-method.module';
 import { PaymentsModule } from './payment/payments.module';
 import { PaymentOptionModule } from './payment_option/payment-option.module';
+import { NotificationModule } from './notification/notification.module';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { PaymentOptionModule } from './payment_option/payment-option.module';
     PaymentMethodModule,
     PaymentsModule,
     PaymentOptionModule,
+    NotificationModule,
   ],
   controllers: [AppController, SubscriptionController],
   providers: [AppService],
