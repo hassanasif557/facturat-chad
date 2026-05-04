@@ -12,6 +12,7 @@ import { UpdateProfileDto } from './dto/update-profile.dto';
 import { Subscription } from 'src/subscription/subscription.entity';
 import { Plan } from 'src/plan/plan.entity';
 import { UserProfileResponse } from './user-profile.response';
+import { NotificationService } from 'src/notification/notification.service';
 
 @Injectable()
 export class UserService {
@@ -24,6 +25,8 @@ export class UserService {
 
     @InjectRepository(Plan)
     private planRepo: Repository<Plan>,
+
+    private notificationService: NotificationService,
   ) {}
 
   // 🔐 Helper
@@ -67,6 +70,12 @@ export class UserService {
 
     // 🔥 assign free plan
     await this.assignFreePlan(saved);
+
+    await this.notificationService.sendPush(
+      saved.fcmToken,
+      'Welcome 🎉',
+      'Your account has been created successfully',
+    );
 
     return this.buildUserProfile(saved);
   }
@@ -301,5 +310,35 @@ export class UserService {
     const saved = await this.userRepository.save(existing);
 
     return this.excludePassword(saved) as User;
+  }
+
+  // ================= NOTIFICATIONS =================
+  async saveFcmToken(user: any, token: string) {
+    const existing = await this.userRepository.findOne({
+      where: { id: user.sub },
+    });
+
+    if (!existing) throw new NotFoundException('User not found');
+
+    existing.fcmToken = token;
+
+    await this.userRepository.save(existing);
+
+    return { message: 'Token saved' };
+  }
+
+  // TEST: send push notification to user
+  async sendTest(userId: number) {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+
+    if (!user?.fcmToken) {
+      throw new NotFoundException('No token found');
+    }
+
+    return this.notificationService.sendPush(
+      user.fcmToken,
+      'Test Notification',
+      'Hello from backend 🚀',
+    );
   }
 }

@@ -117,4 +117,11 @@ export class UserController {
   applyVerification(@Req() req) {
     return this.userService.applyForVerification(req.user);
   }
+
+  @UseGuards(SupabaseAuthGuard, RolesGuard)
+  @Post('fcm-token')
+  @Roles('user')
+  saveToken(@Req() req, @Body() body: { token: string }) {
+    return this.userService.saveFcmToken(req.user, body.token);
+  }
 }

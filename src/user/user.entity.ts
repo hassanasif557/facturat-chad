@@ -86,4 +86,8 @@ export class User {
     nullable: true,
   })
   orgRole!: OrgRole;
+
+  // fcm token for push notifications
+  @Column({ nullable: true })
+  fcmToken!: string;
 }
