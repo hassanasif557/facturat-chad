@@ -131,6 +131,7 @@ export class InvoiceService {
 
     // notify user
     if (userEntity?.fcmToken) {
+      console.log('Sending push notification to user', userEntity.id, 'for invoice', savedInvoice.id);
       await this.notificationService.sendPush(
         userEntity.fcmToken,
         'Invoice Created 💰',

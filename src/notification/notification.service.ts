@@ -11,6 +11,8 @@ export class NotificationService {
     }
 
     if (!admin.apps.length) {
+      console.log('🔥 Initializing Firebase Admin');
+
       admin.initializeApp({
         credential: admin.credential.cert({
           projectId: process.env.FIREBASE_PROJECT_ID,
@@ -22,11 +24,20 @@ export class NotificationService {
   }
 
   // ==============================
-  // 📲 SEND PUSH
+  // 📲 SEND PUSH (DEBUG VERSION)
   // ==============================
-  async sendPush(token: string, title: string, body: string, data?: any) {
+  async sendPush(
+    token: string,
+    title: string,
+    body: string,
+    data?: Record<string, string>,
+  ) {
     try {
-      await admin.messaging().send({
+      console.log('📤 Sending push...');
+      console.log('Token:', token);
+      console.log('Title:', title);
+
+      const response = await admin.messaging().send({
         token,
         notification: {
           title,
@@ -35,10 +46,22 @@ export class NotificationService {
         data: data || {},
       });
 
-      return { success: true };
-    } catch (error) {
-      console.error('Push error:', error);
-      return { success: false };
+      console.log('✅ Push sent successfully:', response);
+
+      return {
+        success: true,
+        messageId: response,
+      };
+    } catch (error: any) {
+      console.error('❌ Push failed:');
+      console.error('Error message:', error.message);
+      console.error('Error code:', error.code);
+
+      return {
+        success: false,
+        error: error.message,
+        code: error.code,
+      };
     }
   }
 }
