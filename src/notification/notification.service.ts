@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import * as admin from 'firebase-admin';
-import * as serviceAccount from '../../factura-9621d-firebase-adminsdk-fbsvc-98a872d519.json';
 
 @Injectable()
 export class NotificationService {
