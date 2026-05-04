@@ -17,6 +17,7 @@ import { InvoiceSearchDto } from './dto/search-invoice.dto';
 import { SettingService } from 'src/settings/setting.service';
 import { UsageService } from 'src/usage/usage.service'; // Assuming this path
 import { SubscriptionService } from 'src/subscription/subscription.service'; // Assuming this path
+import { NotificationService } from 'src/notification/notification.service';
 
 @Injectable()
 export class InvoiceService {
@@ -32,6 +33,8 @@ export class InvoiceService {
     private usageService: UsageService, // ✅ ADD THIS
 
     private subscriptionService: SubscriptionService, // ✅ ADD THIS
+
+    private notificationService: NotificationService,
   ) {}
 
   async create(body: any, files: any[], user: any) {
@@ -125,6 +128,15 @@ export class InvoiceService {
     const invoice = this.repo.create(invoiceData);
 
     const savedInvoice = await this.repo.save(invoice);
+
+    // notify user
+    if (userEntity?.fcmToken) {
+      await this.notificationService.sendPush(
+        userEntity.fcmToken,
+        'Invoice Created 💰',
+        `Invoice #${savedInvoice.id} has been created`,
+      );
+    }
 
     // ===============================
     // ➕ INCREMENT USAGE (CLEAN)

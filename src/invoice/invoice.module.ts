@@ -8,6 +8,7 @@ import { SettingModule } from 'src/settings/setting.module';
 import { UserModule } from 'src/user/user.module';
 import { UsageModule } from 'src/usage/usage.module';
 import { SubscriptionModule } from 'src/subscription/subscription.module';
+import { NotificationModule } from 'src/notification/notification.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { SubscriptionModule } from 'src/subscription/subscription.module';
     SubscriptionModule,
     UsageModule,
     UserModule,
+    NotificationModule,
   ],
   providers: [InvoiceService],
   controllers: [InvoiceController],
