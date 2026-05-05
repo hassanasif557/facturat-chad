@@ -8,6 +8,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from 'src/user/user.entity';
 import { Plan } from 'src/plan/plan.entity';
 import { Subscription } from 'src/subscription/subscription.entity';
+import { NotificationModule } from 'src/notification/notification.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { Subscription } from 'src/subscription/subscription.entity';
       Plan,        
       Subscription,
     ]),
+    NotificationModule,
 
     JwtModule.registerAsync({
       imports: [ConfigModule],

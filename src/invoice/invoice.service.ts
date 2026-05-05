@@ -18,6 +18,7 @@ import { SettingService } from 'src/settings/setting.service';
 import { UsageService } from 'src/usage/usage.service'; // Assuming this path
 import { SubscriptionService } from 'src/subscription/subscription.service'; // Assuming this path
 import { NotificationService } from 'src/notification/notification.service';
+import { NotificationEvent } from 'src/notification/notification-event.enum';
 
 @Injectable()
 export class InvoiceService {
@@ -131,11 +132,13 @@ export class InvoiceService {
 
     // notify user
     if (userEntity?.fcmToken) {
-      console.log('Sending push notification to user', userEntity.id, 'for invoice', savedInvoice.id);
-      await this.notificationService.sendPush(
-        userEntity.fcmToken,
-        'Invoice Created 💰',
-        `Invoice #${savedInvoice.id} has been created`,
+      await this.notificationService.sendEventToUsers(
+        NotificationEvent.INVOICE_CREATED,
+        { userId: userEntity.id },
+        {
+          invoiceId: savedInvoice.id.toString(),
+          name: userEntity.name,
+        },
       );
     }
 

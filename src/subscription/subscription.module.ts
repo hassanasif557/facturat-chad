@@ -6,6 +6,7 @@ import { SubscriptionService } from './subscription.service';
 import { User } from 'src/user/user.entity';
 import { Organization } from 'src/organization/organization.entity';
 import { Invoice } from 'src/invoice/invoice.entity';
+import { NotificationModule } from 'src/notification/notification.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { Invoice } from 'src/invoice/invoice.entity';
       Organization,
       Invoice,
       User,]),
+      NotificationModule,
   ],
   providers: [SubscriptionService],
   exports: [SubscriptionService], // ✅ MUST EXPORT

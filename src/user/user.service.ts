@@ -100,12 +100,6 @@ export class UserService {
 
     Object.assign(user, dto);
     const saved = await this.userRepository.save(user);
-
-    await this.notificationService.sendPush(
-      saved.fcmToken,
-      'Welcome 🎉',
-      'Your account has been updated successfully',
-    );
     
     return this.excludePassword(saved) as User;
   }
@@ -159,11 +153,7 @@ export class UserService {
 
     const saved = await this.userRepository.save(existing);
 
-    await this.notificationService.sendPush(
-      saved.fcmToken,
-      'Welcome 🎉',
-      'Your account has been updated successfully',
-    );
+    
 
     return this.buildUserProfile(saved);
   }

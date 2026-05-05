@@ -11,6 +11,8 @@ import { Plan } from 'src/plan/plan.entity';
 import { User } from 'src/user/user.entity';
 import { Organization } from 'src/organization/organization.entity';
 import { Invoice } from 'src/invoice/invoice.entity';
+import { NotificationEvent } from 'src/notification/notification-event.enum';
+import { NotificationService } from 'src/notification/notification.service';
 
 @Injectable()
 export class SubscriptionService {
@@ -29,6 +31,8 @@ export class SubscriptionService {
 
     @InjectRepository(Invoice)
     private invoiceRepo: Repository<Invoice>,
+
+    private notificationService: NotificationService,
   ) {}
 
   // ✅ SUBSCRIBE
@@ -73,8 +77,21 @@ export class SubscriptionService {
     };
 
     const sub = this.subRepo.create(subData);
-
     const saved = await this.subRepo.save(sub);
+
+    // =========================
+    // 🔔 SEND NOTIFICATION
+    // =========================
+    if (userEntity.fcmToken) {
+      await this.notificationService.sendEventToUsers(
+        NotificationEvent.SUBSCRIPTION_CREATED,
+        { userId: userEntity.id },
+        {
+          planName: plan.name,
+          status: 'Pending',
+        },
+      );
+    }
 
     return this.subRepo.findOne({
       where: { id: saved.id },
@@ -139,12 +156,25 @@ export class SubscriptionService {
     sub.startDate = new Date();
     sub.endDate = new Date(new Date().setMonth(new Date().getMonth() + 1));
 
+    // notify user
+    if (sub.user?.fcmToken) {
+      await this.notificationService.sendEventToUsers(
+        NotificationEvent.SUBSCRIPTION_ACTIVATED,
+        { userId: sub.user.id },
+        {
+          name: sub.user.name,
+          planName: sub.plan.name,
+        },
+      );
+    }
+
     return this.subRepo.save(sub);
   }
 
   async rejectSubscription(id: number) {
     const sub = await this.subRepo.findOne({
       where: { id },
+      relations: ['user', 'organization', 'plan'],
     });
 
     if (!sub) throw new NotFoundException('Subscription not found');
@@ -152,7 +182,24 @@ export class SubscriptionService {
     sub.status = SubscriptionStatus.REJECTED;
     sub.isActive = false;
 
-    return this.subRepo.save(sub);
+    const saved = await this.subRepo.save(sub);
+
+    // =========================
+    // 🔔 SEND NOTIFICATION
+    // =========================
+    const targetUser = sub.user; // individual subscription
+
+    if (targetUser?.fcmToken) {
+      await this.notificationService.sendEventToUsers(
+        NotificationEvent.SUBSCRIPTION_REJECTED,
+        { userId: targetUser.id },
+        {
+          planName: sub.plan?.name || 'Plan',
+        },
+      );
+    }
+
+    return saved;
   }
 
   async getPendingRequests() {

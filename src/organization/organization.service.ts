@@ -10,6 +10,8 @@ import { Repository } from 'typeorm';
 import { User, OrgRole, Role } from 'src/user/user.entity';
 import { SubscriptionService } from 'src/subscription/subscription.service';
 import { InviteStatus, OrganizationInvite } from './organization-invite.entity';
+import { NotificationService } from 'src/notification/notification.service';
+import { NotificationEvent } from 'src/notification/notification-event.enum';
 
 @Injectable()
 export class OrganizationService {
@@ -23,6 +25,7 @@ export class OrganizationService {
     @InjectRepository(OrganizationInvite)
     private inviteRepo: Repository<OrganizationInvite>,
     private subscriptionService: SubscriptionService,
+    private notificationService: NotificationService,
   ) {}
 
   // ✅ CREATE ORGANIZATION
@@ -52,6 +55,18 @@ export class OrganizationService {
     existingUser.orgRole = OrgRole.OWNER;
 
     await this.userRepo.save(existingUser);
+
+    // notify user
+    if (existingUser.fcmToken) {
+      await this.notificationService.sendEventToUsers(
+        NotificationEvent.ORGANIZATION_CREATED,
+        { userId: existingUser.id },
+        {
+          orgName: savedOrg.name,
+          name: existingUser.name,
+        },
+      );
+    }
 
     return savedOrg;
   }
@@ -97,11 +112,26 @@ export class OrganizationService {
       throw new ForbiddenException('Invite already sent');
     }
 
-    return this.inviteRepo.save({
+    const invite = await this.inviteRepo.save({
       organization: owner.organization,
       invitedUser: user,
       status: InviteStatus.PENDING,
     });
+
+    // 🔔 notify invited user
+    // notify user
+    if (user.fcmToken) {
+      await this.notificationService.sendEventToUsers(
+        NotificationEvent.USER_INVITED,
+        { userId: user.id },
+        {
+          orgName: owner.organization.name,
+          name: user.name,
+        },
+      );
+    }
+
+    return invite;
   }
 
   // ✅ ACCEPT INVITE
@@ -136,6 +166,18 @@ export class OrganizationService {
     invite.status = InviteStatus.ACCEPTED;
     await this.inviteRepo.save(invite);
 
+    // notify user
+    if (user.fcmToken) {
+      await this.notificationService.sendEventToUsers(
+        NotificationEvent.INVITE_ACCEPTED,
+        { userId: user.id },
+        {
+          orgName: invite.organization.name,
+          name: user.name,
+        },
+      );
+    }
+
     return { message: 'Joined organization' };
   }
 
@@ -153,8 +195,20 @@ export class OrganizationService {
     }
 
     invite.status = InviteStatus.REJECTED;
+    await this.inviteRepo.save(invite);
 
-    return this.inviteRepo.save(invite);
+    // notify user
+    if (invite.invitedUser.fcmToken) {
+      await this.notificationService.sendEventToUsers(
+        NotificationEvent.INVITE_REJECTED,
+        { userId: invite.invitedUser.id },
+        {
+          name: invite.invitedUser.name,
+        },
+      );
+    }
+
+    return invite;
   }
 
   async removeUser(userId: number, currentUser: any) {
@@ -196,10 +250,25 @@ export class OrganizationService {
     }
 
     // ✅ REMOVE USER FROM ORG
-    user.organization = null;
-    user.orgRole = OrgRole.USER; // reset to default
+    const removedUser = user;
 
-    return this.userRepo.save(user);
+    // remove logic...
+    user.organization = null;
+    user.orgRole = OrgRole.USER;
+
+    await this.userRepo.save(user);
+
+    // 🔔 notify removed user
+    if (removedUser.fcmToken) {
+      await this.notificationService.sendEventToUsers(
+        NotificationEvent.USER_REMOVED,
+        { userId: removedUser.id },
+        {
+          name: removedUser.name,
+          orgName: owner.organization.name,
+        },
+      );
+    }
   }
 
   // ✅ GET MY INVITES

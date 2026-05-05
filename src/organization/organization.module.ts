@@ -6,6 +6,7 @@ import { User } from 'src/user/user.entity';
 import { OrganizationInvite } from './organization-invite.entity';
 import { Organization } from './organization.entity';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { NotificationModule } from 'src/notification/notification.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
     User,
   ]),
   SubscriptionModule,
+  NotificationModule,
 ],
   controllers: [OrganizationController],
   providers: [OrganizationService]

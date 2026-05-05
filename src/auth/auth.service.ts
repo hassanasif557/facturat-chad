@@ -11,6 +11,8 @@ import { Repository } from 'typeorm';
 import { Role, User, VerificationStatus } from 'src/user/user.entity';
 import { Subscription } from 'src/subscription/subscription.entity';
 import { Plan } from 'src/plan/plan.entity';
+import { NotificationEvent } from 'src/notification/notification-event.enum';
+import { NotificationService } from 'src/notification/notification.service';
 
 @Injectable()
 export class AuthService {
@@ -25,6 +27,8 @@ export class AuthService {
 
     @InjectRepository(Subscription)
     private subRepo: Repository<Subscription>,
+
+    private notificationService: NotificationService,
   ) {}
 
   // ================= REGISTER =================
@@ -58,6 +62,7 @@ export class AuthService {
 
     const tokens = await this.generateTokens(user);
 
+
     return {
       ...fullProfile,
       ...tokens,
@@ -78,6 +83,17 @@ export class AuthService {
     const tokens = await this.generateTokens(user);
 
     const fullProfile = await this.buildUserResponse(user);
+
+    // notify user
+        if (user?.fcmToken) {
+          await this.notificationService.sendEventToUsers(
+            NotificationEvent.USER_REGISTERED,
+            { userId: user.id },
+            {
+              name: user.name,
+            },
+          );
+        }
 
     return {
       ...fullProfile,
