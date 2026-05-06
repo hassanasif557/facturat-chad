@@ -18,6 +18,6 @@ import { NotificationModule } from 'src/notification/notification.module';
       NotificationModule,
   ],
   providers: [SubscriptionService],
-  exports: [SubscriptionService], // ✅ MUST EXPORT
+  exports: [SubscriptionService, TypeOrmModule], // ✅ MUST EXPORT
 })
 export class SubscriptionModule {}

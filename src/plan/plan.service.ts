@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -7,12 +8,16 @@ import { Repository } from 'typeorm';
 import { Plan } from './plan.entity';
 import { CreatePlanDto } from './create-plan.dto';
 import { UpdatePlanDto } from './update-plan.dto';
+import { Subscription } from 'src/subscription/subscription.entity';
 
 @Injectable()
 export class PlanService {
   constructor(
     @InjectRepository(Plan)
     private repo: Repository<Plan>,
+
+    @InjectRepository(Subscription)
+    private subRepo: Repository<Subscription>,
   ) {}
 
   // ✅ CREATE
@@ -53,6 +58,16 @@ export class PlanService {
   // ✅ DELETE
   async delete(id: number) {
     const plan = await this.findOne(id);
+
+    const usage = await this.subRepo.count({
+      where: { plan: { id } },
+    });
+
+    if (usage > 0) {
+      throw new BadRequestException(
+        'Cannot delete plan. It is used in subscriptions',
+      );
+    }
 
     await this.repo.delete(id);
 
