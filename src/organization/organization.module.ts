@@ -7,6 +7,8 @@ import { OrganizationInvite } from './organization-invite.entity';
 import { Organization } from './organization.entity';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { NotificationModule } from 'src/notification/notification.module';
+import { Usage } from 'src/usage/usage.entity';
+import { Subscription } from 'src/subscription/subscription.entity';
 
 @Module({
   imports: [
@@ -14,6 +16,8 @@ import { NotificationModule } from 'src/notification/notification.module';
     Organization,
     OrganizationInvite,
     User,
+    Usage,
+    Subscription
   ]),
   SubscriptionModule,
   NotificationModule,

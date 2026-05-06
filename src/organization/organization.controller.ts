@@ -61,4 +61,29 @@ export class OrganizationController {
   getUsers(@Req() req) {
     return this.service.getOrganizationUsers(req.user);
   }
+
+
+  // ======================
+  // 1. BASIC LIST
+  // ======================
+  @Get()
+  getAll() {
+    return this.service.getAllOrganizations();
+  }
+
+  // ======================
+  // 2. STATS LIST
+  // ======================
+  @Get('stats')
+  getStats() {
+    return this.service.getOrganizationStats();
+  }
+
+  // ======================
+  // 3. DETAIL BY ID
+  // ======================
+  @Get(':id')
+  getById(@Param('id') id: number) {
+    return this.service.getOrganizationById(+id);
+  }
 }

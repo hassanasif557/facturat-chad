@@ -12,6 +12,8 @@ import { SubscriptionService } from 'src/subscription/subscription.service';
 import { InviteStatus, OrganizationInvite } from './organization-invite.entity';
 import { NotificationService } from 'src/notification/notification.service';
 import { NotificationEvent } from 'src/notification/notification-event.enum';
+import { Subscription } from 'src/subscription/subscription.entity';
+import { Usage } from 'src/usage/usage.entity';
 
 @Injectable()
 export class OrganizationService {
@@ -26,6 +28,12 @@ export class OrganizationService {
     private inviteRepo: Repository<OrganizationInvite>,
     private subscriptionService: SubscriptionService,
     private notificationService: NotificationService,
+
+    @InjectRepository(Subscription)
+    private subRepo: Repository<Subscription>,
+
+    @InjectRepository(Usage)
+    private usageRepo: Repository<Usage>,
   ) {}
 
   // ✅ CREATE ORGANIZATION
@@ -316,5 +324,110 @@ export class OrganizationService {
       totalUsers: users.length,
       users,
     };
+  }
+
+
+
+  // ==============================
+  // 1️⃣ BASIC ORG LIST
+  // ==============================
+  async getAllOrganizations() {
+    const orgs = await this.orgRepo.find({
+      select: {
+        id: true,
+        name: true,
+      },
+      order: { id: 'DESC' },
+    });
+
+    return orgs;
+  }
+
+  // ==============================
+  // 2️⃣ ORG STATS (users + plan + usage)
+  // ==============================
+  async getOrganizationStats() {
+    const orgs = await this.orgRepo.find();
+
+    const result = await Promise.all(
+      orgs.map(async (org) => {
+        const userCount = await this.userRepo.count({
+          where: { organization: { id: org.id } },
+        });
+
+        const subscription = await this.subRepo.findOne({
+          where: {
+            organization: { id: org.id },
+            isActive: true,
+          },
+          relations: ['plan'],
+        });
+
+        const month = this.getCurrentMonth();
+
+        const usage = await this.usageRepo.findOne({
+          where: {
+            organization: { id: org.id },
+            month,
+          },
+        });
+
+        return {
+          id: org.id,
+          name: org.name,
+          userCount,
+          planName: subscription?.plan?.name || null,
+          usage: usage?.invoiceCount || 0,
+        };
+      }),
+    );
+
+    return result;
+  }
+
+  // ==============================
+  // 3️⃣ FULL ORG DETAIL BY ID
+  // ==============================
+  async getOrganizationById(id: number) {
+    const org = await this.orgRepo.findOne({
+      where: { id },
+      relations: ['owner'],
+    });
+
+    if (!org) throw new NotFoundException('Organization not found');
+
+    const users = await this.userRepo.find({
+      where: { organization: { id } },
+    });
+
+    const subscription = await this.subRepo.findOne({
+      where: {
+        organization: { id },
+        isActive: true,
+      },
+      relations: ['plan'],
+    });
+
+    const month = this.getCurrentMonth();
+
+    const usage = await this.usageRepo.findOne({
+      where: {
+        organization: { id },
+        month,
+      },
+    });
+
+    return {
+      organization: org,
+      users,
+      subscription,
+      usage,
+    };
+  }
+
+  // helper
+  private getCurrentMonth() {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   }
 }
