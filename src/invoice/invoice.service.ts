@@ -84,6 +84,7 @@ export class InvoiceService {
     const products = JSON.parse(body.products);
     const baseUrl = process.env.BASE_URL;
 
+    
     const mappedProducts = products.map((p, index) => ({
       name: p.name,
       price: p.price,

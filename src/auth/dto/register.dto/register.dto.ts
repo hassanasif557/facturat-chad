@@ -1,4 +1,9 @@
-import { IsEmail, IsNotEmpty, MinLength } from 'class-validator';
+import {
+  IsEmail,
+  IsNotEmpty,
+  MinLength,
+  Matches,
+} from 'class-validator';
 
 export class RegisterDto {
   @IsNotEmpty()
@@ -10,7 +15,11 @@ export class RegisterDto {
   @MinLength(6)
   password!: string;
 
-  @IsNotEmpty()
+  // ✅ INTERNATIONAL PHONE VALIDATION
+  @Matches(/^\+[1-9]\d{7,14}$/, {
+    message:
+      'Phone number must be in international format. Example: +923001234567',
+  })
   phone!: string;
 
   @IsNotEmpty()

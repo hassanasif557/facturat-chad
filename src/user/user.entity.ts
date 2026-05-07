@@ -19,7 +19,6 @@ export enum VerificationStatus {
   NOT_VERIFIED = 'not_verified',
 }
 
-// ✅ NEW ENUM for organization roles
 export enum OrgRole {
   OWNER = 'owner',
   STAFF = 'staff',
@@ -31,7 +30,7 @@ export class User {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  @Column()
+  @Column({ unique: true })
   name!: string;
 
   @Column({ unique: true })
@@ -40,13 +39,17 @@ export class User {
   @Column()
   password!: string;
 
-  @Column()
+  // ✅ UNIQUE PHONE
+  @Column({ unique: true })
   phone!: string;
 
-  @Column()
+  @Column({ unique: true })
   tax_number!: string;
 
-  // ✅ SYSTEM ROLE (admin / user)
+  // ✅ PROFILE IMAGE
+  @Column({ nullable: true })
+  profilePicture!: string;
+
   @Column({
     type: 'enum',
     enum: Role,
@@ -54,7 +57,6 @@ export class User {
   })
   role!: Role;
 
-  // ✅ VERIFICATION
   @Column({
     type: 'enum',
     enum: VerificationStatus,
@@ -65,21 +67,15 @@ export class User {
   @Column({ nullable: true })
   refreshToken!: string;
 
-  // ✅ TIMESTAMPS
   @CreateDateColumn()
   createdAt!: Date;
 
   @UpdateDateColumn()
   updatedAt!: Date;
 
-  // ===============================
-  // 🏢 ORGANIZATION (TEAM FEATURE)
-  // ===============================
-
   @ManyToOne(() => Organization, { nullable: true })
   organization!: Organization | null;
 
-  // ✅ SEPARATE FIELD (IMPORTANT)
   @Column({
     type: 'enum',
     enum: OrgRole,
@@ -87,7 +83,6 @@ export class User {
   })
   orgRole!: OrgRole;
 
-  // fcm token for push notifications
   @Column({ nullable: true })
   fcmToken!: string;
 }

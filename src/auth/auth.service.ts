@@ -32,36 +32,72 @@ export class AuthService {
   ) {}
 
   // ================= REGISTER =================
-  async register(data: Partial<User>) {
+  async register(data: Partial<User>, file?: Express.Multer.File) {
     if (!data.email || !data.password) {
       throw new BadRequestException('Email and password required');
     }
 
-    const exists = await this.userRepository.findOne({
+    // ✅ CHECK EMAIL
+    const emailExists = await this.userRepository.findOne({
       where: { email: data.email },
     });
 
-    if (exists) {
+    if (emailExists) {
       throw new BadRequestException('Email already exists');
     }
 
+    // ✅ CHECK PHONE
+    const phoneExists = await this.userRepository.findOne({
+      where: { phone: data.phone },
+    });
+
+    if (phoneExists) {
+      throw new BadRequestException('Phone number already exists');
+    }
+
+    // ✅ NAME EXISTS
+    const nameExists = await this.userRepository.findOne({
+      where: { name: data.name },
+    });
+
+    if (nameExists) {
+      throw new BadRequestException('Name already exists');
+    }
+
+    // ✅ TAX NUMBER EXISTS
+    const taxExists = await this.userRepository.findOne({
+      where: { tax_number: data.tax_number },
+    });
+
+    if (taxExists) {
+      throw new BadRequestException('Tax number already exists');
+    }
+
+    // ✅ HASH PASSWORD
     const hashedPassword = await bcrypt.hash(data.password, 10);
 
-    const user = await this.userRepository.save({
+    const userData = this.userRepository.create({
       ...data,
+
       password: hashedPassword,
+
+      profilePicture: file
+        ? `/uploads/profile-pictures/${file.filename}`
+        : undefined,
+
       role: Role.USER,
+
       verificationStatus: VerificationStatus.NOT_VERIFIED,
     });
 
-    // 🔥 assign free plan here also
+    const user = await this.userRepository.save(userData);
+
+    // ✅ ASSIGN FREE PLAN
     await this.userService.assignFreePlan(user);
 
-    // 🔥 reload full relations AFTER assignment
     const fullProfile = await this.buildUserResponse(user);
 
     const tokens = await this.generateTokens(user);
-
 
     return {
       ...fullProfile,
@@ -85,15 +121,15 @@ export class AuthService {
     const fullProfile = await this.buildUserResponse(user);
 
     // notify user
-        if (user?.fcmToken) {
-          await this.notificationService.sendEventToUsers(
-            NotificationEvent.USER_REGISTERED,
-            { userId: user.id },
-            {
-              name: user.name,
-            },
-          );
-        }
+    if (user?.fcmToken) {
+      await this.notificationService.sendEventToUsers(
+        NotificationEvent.USER_REGISTERED,
+        { userId: user.id },
+        {
+          name: user.name,
+        },
+      );
+    }
 
     return {
       ...fullProfile,

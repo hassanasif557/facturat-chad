@@ -20,6 +20,13 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UpdateVerificationDto } from './dto/update-verification.dto';
 import { UserSearchDto } from './dto/user-search.dto';
+import { UseInterceptors, UploadedFile } from '@nestjs/common';
+
+import { FileInterceptor } from '@nestjs/platform-express';
+
+import { diskStorage } from 'multer';
+
+import { extname } from 'path';
 
 @Controller('users')
 export class UserController {
@@ -30,7 +37,26 @@ export class UserController {
   @UseGuards(SupabaseAuthGuard, RolesGuard)
   @Roles('admin')
   @Post()
-  createUser(@Body() body: CreateUserDto) {
+  @UseInterceptors(
+    FileInterceptor('profilePicture', {
+      storage: diskStorage({
+        destination: './uploads/profile-pictures',
+        filename: (req, file, cb) => {
+          const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
+
+          cb(null, unique + extname(file.originalname));
+        },
+      }),
+    }),
+  )
+  createUser(
+    @Body() body: CreateUserDto,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (file) {
+      body.profilePicture = `/uploads/profile-pictures/${file.filename}`;
+    }
+
     return this.userService.create(body);
   }
 
@@ -58,7 +84,27 @@ export class UserController {
   @UseGuards(SupabaseAuthGuard, RolesGuard)
   @Roles('admin')
   @Put(':id')
-  updateUser(@Param('id') id: number, @Body() body: UpdateUserDto) {
+  @UseInterceptors(
+    FileInterceptor('profilePicture', {
+      storage: diskStorage({
+        destination: './uploads/profile-pictures',
+        filename: (req, file, cb) => {
+          const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
+
+          cb(null, unique + extname(file.originalname));
+        },
+      }),
+    }),
+  )
+  updateUser(
+    @Param('id') id: number,
+    @Body() body: UpdateUserDto,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (file) {
+      body.profilePicture = `/uploads/profile-pictures/${file.filename}`;
+    }
+
     return this.userService.update(id, body);
   }
 
@@ -100,7 +146,27 @@ export class UserController {
   @UseGuards(SupabaseAuthGuard, RolesGuard)
   @Roles('admin', 'user')
   @Put('me')
-  updateMe(@Req() req, @Body() body: UpdateProfileDto) {
+  @UseInterceptors(
+    FileInterceptor('profilePicture', {
+      storage: diskStorage({
+        destination: './uploads/profile-pictures',
+        filename: (req, file, cb) => {
+          const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
+
+          cb(null, unique + extname(file.originalname));
+        },
+      }),
+    }),
+  )
+  updateMe(
+    @Req() req,
+    @Body() body: UpdateProfileDto,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (file) {
+      body.profilePicture = `/uploads/profile-pictures/${file.filename}`;
+    }
+
     return this.userService.updateMe(req.user, body);
   }
 
