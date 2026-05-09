@@ -1,6 +1,12 @@
-import { IsNotEmpty, IsNumber, IsBoolean } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsNumber,
+  IsBoolean,
+  IsString,
+} from 'class-validator';
 
 export class CreatePlanDto {
+  @IsString()
   @IsNotEmpty()
   name!: string;
 

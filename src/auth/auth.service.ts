@@ -3,22 +3,30 @@ import {
   UnauthorizedException,
   BadRequestException,
 } from '@nestjs/common';
+
 import { UserService } from 'src/user/user.service';
+
 import * as bcrypt from 'bcrypt';
+
 import { JwtService } from '@nestjs/jwt';
+
 import { InjectRepository } from '@nestjs/typeorm';
+
 import { Repository } from 'typeorm';
+
 import { Role, User, VerificationStatus } from 'src/user/user.entity';
+
 import { Subscription } from 'src/subscription/subscription.entity';
+
 import { Plan } from 'src/plan/plan.entity';
-import { NotificationEvent } from 'src/notification/notification-event.enum';
-import { NotificationService } from 'src/notification/notification.service';
 
 @Injectable()
 export class AuthService {
   constructor(
     private userService: UserService,
+
     private jwtService: JwtService,
+
     @InjectRepository(User)
     private userRepository: Repository<User>,
 
@@ -27,9 +35,12 @@ export class AuthService {
 
     @InjectRepository(Subscription)
     private subRepo: Repository<Subscription>,
-
-    private notificationService: NotificationService,
   ) {}
+
+  // ================= GENERATE OTP =================
+  private generateOtp() {
+    return Math.floor(1000 + Math.random() * 9000).toString();
+  }
 
   // ================= REGISTER =================
   async register(data: Partial<User>, file?: Express.Multer.File) {
@@ -37,7 +48,6 @@ export class AuthService {
       throw new BadRequestException('Email and password required');
     }
 
-    // ✅ CHECK EMAIL
     const emailExists = await this.userRepository.findOne({
       where: { email: data.email },
     });
@@ -46,7 +56,6 @@ export class AuthService {
       throw new BadRequestException('Email already exists');
     }
 
-    // ✅ CHECK PHONE
     const phoneExists = await this.userRepository.findOne({
       where: { phone: data.phone },
     });
@@ -55,16 +64,6 @@ export class AuthService {
       throw new BadRequestException('Phone number already exists');
     }
 
-    // ✅ NAME EXISTS
-    const nameExists = await this.userRepository.findOne({
-      where: { name: data.name },
-    });
-
-    if (nameExists) {
-      throw new BadRequestException('Name already exists');
-    }
-
-    // ✅ TAX NUMBER EXISTS
     const taxExists = await this.userRepository.findOne({
       where: { tax_number: data.tax_number },
     });
@@ -73,8 +72,9 @@ export class AuthService {
       throw new BadRequestException('Tax number already exists');
     }
 
-    // ✅ HASH PASSWORD
     const hashedPassword = await bcrypt.hash(data.password, 10);
+
+    const otp = this.generateOtp();
 
     const userData = this.userRepository.create({
       ...data,
@@ -88,16 +88,87 @@ export class AuthService {
       role: Role.USER,
 
       verificationStatus: VerificationStatus.NOT_VERIFIED,
+
+      otp,
+
+      otpExpiry: new Date(Date.now() + 5 * 60 * 1000),
+
+      otpVerified: false,
     });
 
     const user = await this.userRepository.save(userData);
 
-    // ✅ ASSIGN FREE PLAN
     await this.userService.assignFreePlan(user);
 
-    const fullProfile = await this.buildUserResponse(user);
+    return {
+      success: true,
+      message: 'OTP sent successfully',
+
+      otp,
+    };
+  }
+
+  // ================= LOGIN =================
+  async login(phone: string, password: string) {
+    const user = await this.userRepository.findOne({
+      where: { phone },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password);
+
+    if (!isMatch) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    const otp = this.generateOtp();
+
+    user.otp = otp;
+
+    user.otpExpiry = new Date(Date.now() + 5 * 60 * 1000);
+
+    user.otpVerified = false;
+
+    await this.userRepository.save(user);
+
+    return {
+      success: true,
+      message: 'OTP sent successfully',
+
+      otp,
+    };
+  }
+
+  // ================= VERIFY OTP =================
+  async verifyOtp(phone: string, otp: string) {
+    const user = await this.userRepository.findOne({
+      where: { phone },
+    });
+
+    if (!user) {
+      throw new BadRequestException('User not found');
+    }
+
+    if (user.otp !== otp) {
+      throw new BadRequestException('Invalid OTP');
+    }
+
+    if (!user.otpExpiry || new Date() > user.otpExpiry) {
+      throw new BadRequestException('OTP expired');
+    }
+
+    user.otpVerified = true;
+
+    user.otp = '';
+
+    await this.userRepository.save(user);
 
     const tokens = await this.generateTokens(user);
+
+    const fullProfile = await this.buildUserResponse(user);
 
     return {
       ...fullProfile,
@@ -105,35 +176,53 @@ export class AuthService {
     };
   }
 
-  // ================= LOGIN =================
-  async login(email: string, password: string) {
+  // ================= FORGOT PASSWORD =================
+  async forgotPassword(phone: string) {
     const user = await this.userRepository.findOne({
-      where: { email },
+      where: { phone },
     });
 
-    if (!user) throw new UnauthorizedException('Invalid credentials');
-
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) throw new UnauthorizedException('Invalid credentials');
-
-    const tokens = await this.generateTokens(user);
-
-    const fullProfile = await this.buildUserResponse(user);
-
-    // notify user
-    if (user?.fcmToken) {
-      await this.notificationService.sendEventToUsers(
-        NotificationEvent.USER_REGISTERED,
-        { userId: user.id },
-        {
-          name: user.name,
-        },
-      );
+    if (!user) {
+      throw new BadRequestException('User not found');
     }
 
+    const otp = this.generateOtp();
+
+    user.otp = otp;
+
+    user.otpExpiry = new Date(Date.now() + 5 * 60 * 1000);
+
+    user.otpVerified = false;
+
+    await this.userRepository.save(user);
+
     return {
-      ...fullProfile,
-      ...tokens,
+      success: true,
+      message: 'OTP sent successfully',
+
+      otp,
+    };
+  }
+
+  // ================= RESET PASSWORD =================
+  async resetPassword(userId: number, password: string) {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new BadRequestException('User not found');
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    user.password = hashedPassword;
+
+    await this.userRepository.save(user);
+
+    return {
+      success: true,
+      message: 'Password reset successful',
     };
   }
 
@@ -141,7 +230,7 @@ export class AuthService {
   async generateTokens(user: User) {
     const payload = {
       sub: user.id,
-      email: user.email,
+      phone: user.phone,
       role: user.role,
     };
 
@@ -155,14 +244,16 @@ export class AuthService {
       expiresIn: '7d',
     });
 
-    // 🔐 hash refresh token before storing
     const hashedRefresh = await bcrypt.hash(refreshToken, 10);
 
     await this.userRepository.update(user.id, {
       refreshToken: hashedRefresh,
     });
 
-    return { accessToken, refreshToken };
+    return {
+      accessToken,
+      refreshToken,
+    };
   }
 
   // ================= REFRESH =================
@@ -180,74 +271,79 @@ export class AuthService {
         throw new UnauthorizedException();
       }
 
-      const isMatch = await bcrypt.compare(refreshToken, user.refreshToken);
+      const isMatch = await bcrypt.compare(
+        refreshToken,
+        user.refreshToken,
+      );
 
       if (!isMatch) {
         throw new UnauthorizedException('Invalid refresh token');
       }
 
-      // 🔁 ROTATE TOKENS
       const tokens = await this.generateTokens(user);
+
       const fullProfile = await this.buildUserResponse(user);
 
       return {
         ...fullProfile,
         ...tokens,
       };
-    } catch (err) {
+    } catch {
       throw new UnauthorizedException('Invalid refresh token');
     }
   }
 
   // ================= LOGOUT =================
   async logout(userId: number) {
-    if (!userId) {
-      throw new UnauthorizedException('Invalid user');
-    }
+    await this.userRepository.update(
+      { id: userId },
+      { refreshToken: '' },
+    );
 
-    await this.userRepository.update({ id: userId }, { refreshToken: '' });
-
-    return { message: 'Logged out successfully' };
+    return {
+      message: 'Logged out successfully',
+    };
   }
 
   // ================= HELPER =================
   excludePassword(user: User) {
     const { password, refreshToken, ...safeUser } = user;
+
     return safeUser;
   }
 
-  // ================= USER FULL PROFILE =================
+  // ================= USER RESPONSE =================
   private async buildUserResponse(user: User) {
     const fullUser = await this.userRepository.findOne({
       where: { id: user.id },
+
       relations: ['organization'],
     });
-
-    if (!fullUser) return null;
 
     const subscription = await this.subRepo.findOne({
       where: {
         user: { id: user.id },
       },
+
       relations: ['plan', 'organization'],
+
       order: { id: 'DESC' },
     });
 
     return {
-      user: this.excludePassword(fullUser),
+      user: this.excludePassword(fullUser!),
 
-      organization: fullUser.organization || null,
+      organization: fullUser?.organization || null,
 
       subscription: subscription || null,
 
       plan: subscription?.plan || null,
 
       usage: {
-        invoicesUsed: 0, // 🔥 replace later from UsageService
+        invoicesUsed: 0,
+
         userUsed: 0,
       },
-
-      subscriptionHistory: [], // 🔥 add later if needed
     };
   }
 }

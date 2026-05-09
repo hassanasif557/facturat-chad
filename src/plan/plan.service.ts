@@ -3,11 +3,17 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+
 import { InjectRepository } from '@nestjs/typeorm';
+
 import { Repository } from 'typeorm';
+
 import { Plan } from './plan.entity';
+
 import { CreatePlanDto } from './create-plan.dto';
+
 import { UpdatePlanDto } from './update-plan.dto';
+
 import { Subscription } from 'src/subscription/subscription.entity';
 
 @Injectable()
@@ -22,7 +28,21 @@ export class PlanService {
 
   // ✅ CREATE
   async create(dto: CreatePlanDto) {
+    // ✅ CHECK DUPLICATE NAME
+    const existing = await this.repo.findOne({
+      where: {
+        name: dto.name,
+      },
+    });
+
+    if (existing) {
+      throw new BadRequestException(
+        'Plan with this name already exists',
+      );
+    }
+
     const plan = this.repo.create(dto);
+
     return this.repo.save(plan);
   }
 
@@ -50,6 +70,21 @@ export class PlanService {
   async update(id: number, dto: UpdatePlanDto) {
     const plan = await this.findOne(id);
 
+    // ✅ CHECK DUPLICATE NAME
+    if (dto.name && dto.name !== plan.name) {
+      const existing = await this.repo.findOne({
+        where: {
+          name: dto.name,
+        },
+      });
+
+      if (existing) {
+        throw new BadRequestException(
+          'Plan with this name already exists',
+        );
+      }
+    }
+
     Object.assign(plan, dto);
 
     return this.repo.save(plan);
@@ -57,7 +92,7 @@ export class PlanService {
 
   // ✅ DELETE
   async delete(id: number) {
-    const plan = await this.findOne(id);
+    await this.findOne(id);
 
     const usage = await this.subRepo.count({
       where: { plan: { id } },
@@ -71,6 +106,8 @@ export class PlanService {
 
     await this.repo.delete(id);
 
-    return { message: 'Plan deleted successfully' };
+    return {
+      message: 'Plan deleted successfully',
+    };
   }
 }

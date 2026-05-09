@@ -30,7 +30,7 @@ export class User {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  @Column({ unique: true })
+  @Column()
   name!: string;
 
   @Column({ unique: true })
@@ -85,4 +85,13 @@ export class User {
 
   @Column({ nullable: true })
   fcmToken!: string;
+
+  @Column({ nullable: true })
+  otp!: string;
+
+  @Column({ nullable: true })
+  otpExpiry!: Date;
+
+  @Column({ default: false })
+  otpVerified!: boolean;
 }

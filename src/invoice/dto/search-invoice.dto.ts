@@ -17,6 +17,11 @@ export class InvoiceSearchDto {
   id?: number;
 
   @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  userId?: number;
+
+  @IsOptional()
   @IsString()
   name?: string;
 

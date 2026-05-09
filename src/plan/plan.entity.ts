@@ -5,21 +5,22 @@ export class Plan {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  @Column()
-  name!: string; // Free, Solo, Pro, Business
+  // ✅ UNIQUE PLAN NAME
+  @Column({ unique: true })
+  name!: string;
 
   @Column({ nullable: true })
-  invoiceLimit!: number; // null = unlimited
+  invoiceLimit!: number;
 
   @Column({ nullable: true })
-  userLimit!: number; // null = unlimited
+  userLimit!: number;
 
   @Column('float', { default: 0 })
   price!: number;
 
   @Column()
-  durationDays!: number; // ✅ NEW (IMPORTANT)
+  durationDays!: number;
 
   @Column({ default: false })
-  isTeamPlan!: boolean; // Pro & Business = true
+  isTeamPlan!: boolean;
 }

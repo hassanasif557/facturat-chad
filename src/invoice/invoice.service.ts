@@ -84,7 +84,6 @@ export class InvoiceService {
     const products = JSON.parse(body.products);
     const baseUrl = process.env.BASE_URL;
 
-    
     const mappedProducts = products.map((p, index) => ({
       name: p.name,
       price: p.price,
@@ -289,6 +288,7 @@ export class InvoiceService {
   async search(query: InvoiceSearchDto) {
     const {
       id,
+      userId,
       name,
       customerName,
       startDate,
@@ -306,6 +306,12 @@ export class InvoiceService {
 
     if (id) {
       qb.andWhere('invoice.id = :id', { id });
+    }
+
+    if (userId) {
+      qb.andWhere('user.id = :userId', {
+        userId,
+      });
     }
 
     if (name) {

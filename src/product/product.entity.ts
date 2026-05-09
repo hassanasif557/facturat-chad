@@ -3,7 +3,9 @@ import {
   PrimaryGeneratedColumn,
   Column,
   ManyToOne,
+  Index,
 } from 'typeorm';
+
 import { User } from 'src/user/user.entity';
 
 @Entity()
@@ -11,6 +13,8 @@ export class Product {
   @PrimaryGeneratedColumn()
   id!: number;
 
+  // ✅ INDEXED FOR SEARCH
+  @Index()
   @Column()
   name!: string;
 
@@ -23,9 +27,18 @@ export class Product {
   @Column({ nullable: true })
   imageUrl!: string;
 
+  // ✅ GLOBAL OR LOCAL
   @Column({ default: false })
-  isGlobal!: boolean; // ✅ true = admin catalog
+  isGlobal!: boolean;
 
+  // ✅ OWNER
   @ManyToOne(() => User, { nullable: true })
-  user!: User; // null for global, userId for personal
+  user!: User;
+
+  // ✅ TIMESTAMPS
+  @Column({
+    type: 'timestamp',
+    default: () => 'CURRENT_TIMESTAMP',
+  })
+  createdAt!: Date;
 }

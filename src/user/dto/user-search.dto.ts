@@ -5,6 +5,7 @@ import {
   IsNumber,
 } from 'class-validator';
 import { OrgRole, VerificationStatus } from '../user.entity';
+import { Type } from 'class-transformer';
 
 export class UserSearchDto {
   @IsOptional()
@@ -44,10 +45,12 @@ export class UserSearchDto {
   updatedTo?: Date;
 
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   page?: number = 1;
 
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   limit?: number = 10;
 }

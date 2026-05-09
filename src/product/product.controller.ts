@@ -12,11 +12,17 @@ import {
   UploadedFile,
   Query,
 } from '@nestjs/common';
+
 import { ProductService } from './product.service';
+
 import { SupabaseAuthGuard } from 'src/auth/supabase-auth/supabase-auth.guard';
+
 import { RolesGuard } from 'src/auth/guards/roles.guard';
+
 import { Roles } from 'src/auth/decorators/roles.decorator';
+
 import { FileInterceptor } from '@nestjs/platform-express';
+
 import { diskStorage } from 'multer';
 
 @Controller('products')
@@ -24,12 +30,14 @@ import { diskStorage } from 'multer';
 export class ProductController {
   constructor(private service: ProductService) {}
 
-  // ===== IMAGE UPLOAD =====
+  // ================= IMAGE UPLOAD =================
+
   @Post('upload')
   @UseInterceptors(
     FileInterceptor('file', {
       storage: diskStorage({
         destination: './uploads',
+
         filename: (req, file, cb) => {
           cb(null, Date.now() + '-' + file.originalname);
         },
@@ -38,16 +46,30 @@ export class ProductController {
   )
   upload(@UploadedFile() file) {
     return {
-      imageUrl: `http://localhost:3000/uploads/${file.filename}`,
+      imageUrl: `${process.env.BASE_URL}/uploads/${file.filename}`,
     };
   }
 
-  // ===== GLOBAL (ADMIN) =====
+  // ================= ADMIN GLOBAL =================
 
   @Post('global')
   @Roles('admin')
   createGlobal(@Body() body) {
     return this.service.createGlobal(body);
+  }
+
+  // ✅ ADMIN SEE ALL PRODUCTS
+  @Get('admin/all')
+  @Roles('admin')
+  getAllProducts(@Query() query: any) {
+    return this.service.getAllProducts(query);
+  }
+
+  // ✅ POPULAR PRODUCTS
+  @Get('admin/popular')
+  @Roles('admin')
+  getPopularProducts(@Query('limit') limit: number) {
+    return this.service.getPopularProducts(limit);
   }
 
   @Get('global')
@@ -59,16 +81,22 @@ export class ProductController {
   @Put('global/:id')
   @Roles('admin')
   updateGlobal(@Param('id') id: number, @Body() body) {
-    return this.service.updateGlobal(id, body);
+    return this.service.updateGlobal(Number(id), body);
   }
 
   @Delete('global/:id')
   @Roles('admin')
   deleteGlobal(@Param('id') id: number) {
-    return this.service.deleteGlobal(id);
+    return this.service.deleteGlobal(Number(id));
   }
 
-  // ===== USER PERSONAL =====
+  @Post('admin/add-popular-to-global')
+  @Roles('admin')
+  addPopularToGlobal(@Body('name') name: string) {
+    return this.service.addPopularToGlobal(name);
+  }
+
+  // ================= USER LOCAL =================
 
   @Post()
   @Roles('user')
@@ -85,12 +113,12 @@ export class ProductController {
   @Put(':id')
   @Roles('user')
   updateUser(@Param('id') id: number, @Body() body, @Req() req) {
-    return this.service.updateUserProduct(id, body, req.user);
+    return this.service.updateUserProduct(Number(id), body, req.user);
   }
 
   @Delete(':id')
   @Roles('user')
   deleteUser(@Param('id') id: number, @Req() req) {
-    return this.service.deleteUserProduct(id, req.user);
+    return this.service.deleteUserProduct(Number(id), req.user);
   }
 }
