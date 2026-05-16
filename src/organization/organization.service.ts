@@ -37,7 +37,8 @@ export class OrganizationService {
   ) {}
 
   // ✅ CREATE ORGANIZATION
-  async createOrganization(name: string, user: any) {
+  // ✅ CREATE ORGANIZATION
+  async createOrganization(dto: any, user: any, file?: Express.Multer.File) {
     const existingUser = await this.userRepo.findOne({
       where: { id: user.sub },
       relations: ['organization'],
@@ -51,20 +52,38 @@ export class OrganizationService {
       throw new BadRequestException('Already in an organization');
     }
 
-    const org = this.orgRepo.create({
-      name,
-      owner: { id: user.sub },
+    // ✅ CHECK DUPLICATE NAME
+    const existingOrg = await this.orgRepo.findOne({
+      where: {
+        name: dto.name,
+      },
     });
+
+    if (existingOrg) {
+      throw new BadRequestException('Organization name already exists');
+    }
+
+    const orgData: Partial<Organization> = {
+      name: dto.name,
+
+      profilePicture: file
+        ? `/uploads/organizations/${file.filename}`
+        : undefined,
+
+      owner: { id: user.sub } as User,
+    };
+
+    const org = this.orgRepo.create(orgData);
 
     const savedOrg = await this.orgRepo.save(org);
 
-    // ✅ attach user as OWNER
+    // ✅ ATTACH OWNER
     existingUser.organization = savedOrg;
     existingUser.orgRole = OrgRole.OWNER;
 
     await this.userRepo.save(existingUser);
 
-    // notify user
+    // 🔔 NOTIFY
     if (existingUser.fcmToken) {
       await this.notificationService.sendEventToUsers(
         NotificationEvent.ORGANIZATION_CREATED,
@@ -326,8 +345,6 @@ export class OrganizationService {
     };
   }
 
-
-
   // ==============================
   // 1️⃣ BASIC ORG LIST
   // ==============================
@@ -336,6 +353,7 @@ export class OrganizationService {
       select: {
         id: true,
         name: true,
+        profilePicture: true,
       },
       order: { id: 'DESC' },
     });
@@ -375,6 +393,7 @@ export class OrganizationService {
         return {
           id: org.id,
           name: org.name,
+          profilePicture: org.profilePicture,
           userCount,
           planName: subscription?.plan?.name || null,
           usage: usage?.invoiceCount || 0,
@@ -429,5 +448,84 @@ export class OrganizationService {
   private getCurrentMonth() {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  }
+
+  // ==============================
+  // MY ORGANIZATION DETAILS
+  // ==============================
+  async getMyOrganizationDetails(currentUser: any) {
+    const user = await this.userRepo.findOne({
+      where: { id: currentUser.sub },
+      relations: ['organization'],
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (!user.organization) {
+      throw new BadRequestException('User is not in any organization');
+    }
+
+    const orgId = user.organization.id;
+
+    const organization = await this.orgRepo.findOne({
+      where: { id: orgId },
+      relations: ['owner'],
+    });
+
+    const users = await this.userRepo.find({
+      where: {
+        organization: {
+          id: orgId,
+        },
+      },
+      select: [
+        'id',
+        'name',
+        'email',
+        'phone',
+        'profilePicture',
+        'orgRole',
+        'createdAt',
+      ],
+      order: { id: 'DESC' },
+    });
+
+    const subscription = await this.subRepo.findOne({
+      where: {
+        organization: {
+          id: orgId,
+        },
+        isActive: true,
+      },
+      relations: ['plan'],
+    });
+
+    const month = this.getCurrentMonth();
+
+    const usage = await this.usageRepo.findOne({
+      where: {
+        organization: {
+          id: orgId,
+        },
+        month,
+      },
+    });
+
+    return {
+      organization,
+
+      users,
+
+      subscription,
+
+      plan: subscription?.plan || null,
+
+      usage: usage || {
+        invoiceCount: 0,
+        userCount: users.length,
+      },
+    };
   }
 }

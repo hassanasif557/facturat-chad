@@ -9,6 +9,10 @@ export class Organization {
   @Column()
   name!: string;
 
+  // ✅ NEW PROFILE IMAGE
+  @Column({ nullable: true })
+  profilePicture!: string;
+
   @ManyToOne(() => User)
   owner!: User;
 

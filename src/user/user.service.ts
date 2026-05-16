@@ -9,7 +9,10 @@ import { User, VerificationStatus } from './user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
-import { Subscription } from 'src/subscription/subscription.entity';
+import {
+  Subscription,
+  SubscriptionStatus,
+} from 'src/subscription/subscription.entity';
 import { Plan } from 'src/plan/plan.entity';
 import { UserProfileResponse } from './user-profile.response';
 import { NotificationService } from 'src/notification/notification.service';
@@ -66,71 +69,67 @@ export class UserService {
   // ================= ADMIN =================
 
   async create(dto: CreateUserDto): Promise<UserProfileResponse> {
-  // ✅ CHECK EMAIL
-  const emailExists = await this.userRepository.findOne({
-    where: { email: dto.email },
-  });
+    // ✅ CHECK EMAIL
+    const emailExists = await this.userRepository.findOne({
+      where: { email: dto.email },
+    });
 
-  if (emailExists) {
-    throw new BadRequestException('Email already exists');
+    if (emailExists) {
+      throw new BadRequestException('Email already exists');
+    }
+
+    // ✅ CHECK PHONE
+    const phoneExists = await this.userRepository.findOne({
+      where: { phone: dto.phone },
+    });
+
+    if (phoneExists) {
+      throw new BadRequestException('Phone number already exists');
+    }
+
+    // ✅ NAME EXISTS
+    const nameExists = await this.userRepository.findOne({
+      where: { name: dto.name },
+    });
+
+    if (nameExists) {
+      throw new BadRequestException('Name already exists');
+    }
+
+    // ✅ TAX NUMBER EXISTS
+    const taxExists = await this.userRepository.findOne({
+      where: { tax_number: dto.tax_number },
+    });
+
+    if (taxExists) {
+      throw new BadRequestException('Tax number already exists');
+    }
+
+    // ✅ HASH PASSWORD
+    const hashedPassword = await bcrypt.hash(dto.password, 10);
+
+    // ✅ CREATE USER
+    const user = this.userRepository.create({
+      ...dto,
+      password: hashedPassword,
+    });
+
+    const saved = await this.userRepository.save(user);
+
+    // ✅ ASSIGN FREE PLAN
+    await this.assignFreePlan(saved);
+
+    // ✅ SEND NOTIFICATION
+    if (saved.fcmToken) {
+      await this.notificationService.sendPush(
+        saved.fcmToken,
+        'Welcome 🎉',
+        'Your account has been created successfully',
+      );
+    }
+
+    return this.buildUserProfile(saved);
   }
-
-  // ✅ CHECK PHONE
-  const phoneExists = await this.userRepository.findOne({
-    where: { phone: dto.phone },
-  });
-
-  if (phoneExists) {
-    throw new BadRequestException('Phone number already exists');
-  }
-
-  // ✅ NAME EXISTS
-  const nameExists = await this.userRepository.findOne({
-    where: { name: dto.name },
-  });
-
-  if (nameExists) {
-    throw new BadRequestException(
-      'Name already exists',
-    );
-  }
-
-  // ✅ TAX NUMBER EXISTS
-  const taxExists = await this.userRepository.findOne({
-    where: { tax_number: dto.tax_number },
-  });
-
-  if (taxExists) {
-    throw new BadRequestException(
-      'Tax number already exists',
-    );
-  }
-
-  // ✅ HASH PASSWORD
-  const hashedPassword = await bcrypt.hash(dto.password, 10);
-
-  // ✅ CREATE USER
-  const user = this.userRepository.create({
-    ...dto,
-    password: hashedPassword,
-  });
-
-  const saved = await this.userRepository.save(user);
-
-  // ✅ ASSIGN FREE PLAN
-  await this.assignFreePlan(saved);
-
-  // ✅ SEND NOTIFICATION
-  if (saved.fcmToken) {
-    await this.notificationService.sendPush(
-      saved.fcmToken,
-      'Welcome 🎉',
-      'Your account has been created successfully',
-    );
-  }
-
-  return this.buildUserProfile(saved);
-}
 
   async findAll(): Promise<UserProfileResponse[]> {
     const users = await this.userRepository.find();
@@ -146,29 +145,29 @@ export class UserService {
   }
 
   async update(id: number, dto: UpdateUserDto): Promise<User> {
-  const user = await this.userRepository.findOneBy({ id });
+    const user = await this.userRepository.findOneBy({ id });
 
-  if (!user) {
-    throw new NotFoundException('User not found');
-  }
-
-  // ✅ CHECK DUPLICATE PHONE
-  if (dto.phone && dto.phone !== user.phone) {
-    const existingPhone = await this.userRepository.findOne({
-      where: { phone: dto.phone },
-    });
-
-    if (existingPhone) {
-      throw new BadRequestException('Phone number already exists');
+    if (!user) {
+      throw new NotFoundException('User not found');
     }
+
+    // ✅ CHECK DUPLICATE PHONE
+    if (dto.phone && dto.phone !== user.phone) {
+      const existingPhone = await this.userRepository.findOne({
+        where: { phone: dto.phone },
+      });
+
+      if (existingPhone) {
+        throw new BadRequestException('Phone number already exists');
+      }
+    }
+
+    Object.assign(user, dto);
+
+    const saved = await this.userRepository.save(user);
+
+    return this.excludePassword(saved) as User;
   }
-
-  Object.assign(user, dto);
-
-  const saved = await this.userRepository.save(user);
-
-  return this.excludePassword(saved) as User;
-}
 
   async delete(id: number) {
     const result = await this.userRepository.delete(id);
@@ -185,15 +184,43 @@ export class UserService {
     id: number,
     status: VerificationStatus,
   ): Promise<User> {
-    const user = await this.userRepository.findOneBy({ id });
+    const user = await this.userRepository.findOne({
+      where: { id },
+    });
 
-    if (!user) throw new NotFoundException('User not found');
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
 
+    // ✅ UPDATE USER VERIFICATION
     user.verificationStatus = status;
 
-    const saved = await this.userRepository.save(user);
+    const savedUser = await this.userRepository.save(user);
 
-    return this.excludePassword(saved) as User;
+    // ✅ GET ACTIVE FREE PLAN SUBSCRIPTION
+    const freeSubscription = await this.subscriptionRepo.findOne({
+      where: {
+        user: { id: user.id },
+        isActive: true,
+      },
+      relations: ['plan'],
+      order: {
+        id: 'DESC',
+      },
+    });
+
+    // ✅ APPROVE / DISAPPROVE FREE PLAN
+    if (freeSubscription) {
+      if (status === VerificationStatus.VERIFIED) {
+        freeSubscription.status = SubscriptionStatus.ACTIVE;
+      } else {
+        freeSubscription.status = SubscriptionStatus.PENDING;
+      }
+
+      await this.subscriptionRepo.save(freeSubscription);
+    }
+
+    return this.excludePassword(savedUser) as User;
   }
 
   // ================= USER SELF =================
@@ -208,35 +235,32 @@ export class UserService {
     return this.buildUserProfile(found);
   }
 
-  async updateMe(
-  user,
-  dto: UpdateProfileDto,
-): Promise<UserProfileResponse> {
-  const existing = await this.userRepository.findOne({
-    where: { id: user.sub },
-  });
-
-  if (!existing) {
-    throw new NotFoundException('User not found');
-  }
-
-  // ✅ CHECK PHONE DUPLICATE
-  if (dto.phone && dto.phone !== existing.phone) {
-    const already = await this.userRepository.findOne({
-      where: { phone: dto.phone },
+  async updateMe(user, dto: UpdateProfileDto): Promise<UserProfileResponse> {
+    const existing = await this.userRepository.findOne({
+      where: { id: user.sub },
     });
 
-    if (already) {
-      throw new BadRequestException('Phone already exists');
+    if (!existing) {
+      throw new NotFoundException('User not found');
     }
+
+    // ✅ CHECK PHONE DUPLICATE
+    if (dto.phone && dto.phone !== existing.phone) {
+      const already = await this.userRepository.findOne({
+        where: { phone: dto.phone },
+      });
+
+      if (already) {
+        throw new BadRequestException('Phone already exists');
+      }
+    }
+
+    Object.assign(existing, dto);
+
+    const saved = await this.userRepository.save(existing);
+
+    return this.buildUserProfile(saved);
   }
-
-  Object.assign(existing, dto);
-
-  const saved = await this.userRepository.save(existing);
-
-  return this.buildUserProfile(saved);
-}
 
   async deleteMe(user) {
     const result = await this.userRepository.delete(user.sub);

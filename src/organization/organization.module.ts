@@ -9,20 +9,26 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { NotificationModule } from 'src/notification/notification.module';
 import { Usage } from 'src/usage/usage.entity';
 import { Subscription } from 'src/subscription/subscription.entity';
+import { ServeStaticModule } from '@nestjs/serve-static';
+import { join } from 'path';
 
 @Module({
   imports: [
-  TypeOrmModule.forFeature([
-    Organization,
-    OrganizationInvite,
-    User,
-    Usage,
-    Subscription
-  ]),
-  SubscriptionModule,
-  NotificationModule,
-],
+    ServeStaticModule.forRoot({
+      rootPath: join(__dirname, '..', 'uploads'),
+      serveRoot: '/uploads',
+    }),
+    TypeOrmModule.forFeature([
+      Organization,
+      OrganizationInvite,
+      User,
+      Usage,
+      Subscription,
+    ]),
+    SubscriptionModule,
+    NotificationModule,
+  ],
   controllers: [OrganizationController],
-  providers: [OrganizationService]
+  providers: [OrganizationService],
 })
 export class OrganizationModule {}
