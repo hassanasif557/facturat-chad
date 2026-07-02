@@ -16,6 +16,7 @@ async function bootstrap() {
       process.env.BASE_URL_PROD,
       'https://www.figma.com',
       'https://www.e-facture.td',
+      'https://e-facture.td',
       'http://localhost:5173',
 
       // ✅ VPS FRONTEND
