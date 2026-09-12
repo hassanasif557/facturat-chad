@@ -100,6 +100,6 @@ export class Transaction {
   @CreateDateColumn()
   createdAt!: Date;
 
-  @Column({ nullable: true })
-  completedAt!: Date;
+  @Column({ type: 'timestamptz', nullable: true })
+  completedAt!: Date | null;
 }

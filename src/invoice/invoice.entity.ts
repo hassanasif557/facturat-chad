@@ -56,11 +56,11 @@ export class Invoice {
   @Column({ nullable: true })
   invoiceNumber!: string;
 
-  @Column({ nullable: true })
-  issuedAt!: Date;
+  @Column({ type: 'timestamptz', nullable: true })
+  issuedAt!: Date | null;
 
-  @Column({ nullable: true })
-  dueAt!: Date;
+  @Column({ type: 'timestamptz', nullable: true })
+  dueAt!: Date | null;
 
   @Column({ default: 'XAF' })
   currency!: string;

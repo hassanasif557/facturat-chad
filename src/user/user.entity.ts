@@ -44,8 +44,8 @@ export class User {
   @Column({ unique: true })
   phone!: string;
 
-  @Column({ unique: true, nullable: true })
-  tax_number!: string;
+  @Column({ type: 'varchar', unique: true, nullable: true })
+  tax_number!: string | null;
 
   // ✅ PROFILE IMAGE
   @Column({ nullable: true })
@@ -90,8 +90,8 @@ export class User {
   @Column({ nullable: true })
   otp!: string;
 
-  @Column({ nullable: true })
-  otpExpiry!: Date;
+  @Column({ type: 'timestamptz', nullable: true })
+  otpExpiry!: Date | null;
 
   @Column({ default: false })
   otpVerified!: boolean;
@@ -102,11 +102,11 @@ export class User {
   @Column({ nullable: true, unique: true })
   phoneNormalized!: string;
 
-  @Column({ nullable: true })
-  phoneVerifiedAt!: Date;
+  @Column({ type: 'timestamptz', nullable: true })
+  phoneVerifiedAt!: Date | null;
 
-  @Column({ nullable: true })
-  emailVerifiedAt!: Date;
+  @Column({ type: 'timestamptz', nullable: true })
+  emailVerifiedAt!: Date | null;
 
   @Column({ default: 'fr' })
   language!: string;
