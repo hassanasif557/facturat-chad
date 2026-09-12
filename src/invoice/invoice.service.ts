@@ -5,20 +5,19 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DeepPartial, Repository } from 'typeorm';
-import { Invoice } from './invoice.entity';
+import { Invoice, InvoicePaymentStatus, InvoiceStatus } from './invoice.entity';
 import * as QRCode from 'qrcode';
 import PDFDocument from 'pdfkit';
 import * as fs from 'fs';
 import * as path from 'path';
-import { User } from 'src/user/user.entity';
-import { InvoiceStatus } from './invoice.entity';
-import { VerificationStatus } from 'src/user/user.entity';
+import { Role, User, VerificationStatus } from 'src/user/user.entity';
 import { InvoiceSearchDto } from './dto/search-invoice.dto';
 import { SettingService } from 'src/settings/setting.service';
 import { UsageService } from 'src/usage/usage.service'; // Assuming this path
 import { SubscriptionService } from 'src/subscription/subscription.service'; // Assuming this path
 import { NotificationService } from 'src/notification/notification.service';
 import { NotificationEvent } from 'src/notification/notification-event.enum';
+import { normalizePhoneE164 } from 'src/common/utils/phone.util';
 
 @Injectable()
 export class InvoiceService {
@@ -81,7 +80,7 @@ export class InvoiceService {
     // ===============================
     // 📦 PROCESS PRODUCTS
     // ===============================
-    const products = JSON.parse(body.products);
+    const products = JSON.parse(body.products || '[]');
     const baseUrl = process.env.BASE_URL;
 
     const mappedProducts = products.map((p, index) => ({
@@ -97,6 +96,17 @@ export class InvoiceService {
       (sum, p) => sum + p.price * p.quantity,
       0,
     );
+
+    const customerPhoneNormalized = normalizePhoneE164(body.customerPhone || '');
+    if (!customerPhoneNormalized) {
+      throw new ForbiddenException('Valid customerPhone (E.164) is required');
+    }
+    const matchedCustomer = await this.userRepo.findOne({
+      where: {
+        phoneNormalized: customerPhoneNormalized,
+        role: Role.CUSTOMER,
+      },
+    });
 
     const qrData = `Pay Rs ${totalAmount}`;
     const qrCode = await QRCode.toDataURL(qrData);
@@ -115,15 +125,30 @@ export class InvoiceService {
     // ===============================
     const invoiceData: DeepPartial<Invoice> = {
       customerName: body.customerName || '',
+      customerPhone: body.customerPhone,
+      customerPhoneNormalized,
+      customerEmail: body.customerEmail || null,
       date: new Date(body.date).toISOString(),
-      totalAmount,
+      totalAmount: Number(body.totalAmount || totalAmount),
+      invoiceNumber: body.invoiceNumber || `FEN-${new Date().getFullYear()}-${Date.now()}`,
+      issuedAt: body.date ? new Date(body.date) : new Date(),
+      dueAt: body.dueDate ? new Date(body.dueDate) : undefined,
+      currency: body.currency || 'XAF',
+      subtotalAmount: Number(body.totalAmount || totalAmount),
+      taxAmount: 0,
+      discountAmount: 0,
+      amountPaid: 0,
+      balanceDue: Number(body.totalAmount || totalAmount),
+      paymentStatus: InvoicePaymentStatus.UNPAID,
+      deliveryStatus: matchedCustomer ? 'delivered' : 'pending',
       products: mappedProducts,
       qrCode,
       pdfPath: pdfUrl,
-      status: InvoiceStatus.PENDING,
+      status: InvoiceStatus.ISSUED,
 
       user: userEntity,
       organization: userEntity.organization ?? null,
+      customerUser: matchedCustomer ?? null,
     };
 
     const invoice = this.repo.create(invoiceData);

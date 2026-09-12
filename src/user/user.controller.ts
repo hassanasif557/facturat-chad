@@ -186,8 +186,17 @@ export class UserController {
 
   @UseGuards(SupabaseAuthGuard, RolesGuard)
   @Post('fcm-token')
-  @Roles('user')
-  saveToken(@Req() req, @Body() body: { token: string }) {
-    return this.userService.saveFcmToken(req.user, body.token);
+  @Roles('user', 'customer')
+  saveToken(
+    @Req() req,
+    @Body()
+    body: {
+      token: string;
+      deviceId?: string;
+      platform?: string;
+      appVersion?: string;
+    },
+  ) {
+    return this.userService.saveFcmToken(req.user, body);
   }
 }

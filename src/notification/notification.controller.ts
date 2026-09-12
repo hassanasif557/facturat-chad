@@ -1,8 +1,21 @@
-import { Body, Controller, Get, Post, Query, Req } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { NotificationService } from './notification.service';
 import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Notification } from './notification.entity';
+import { SupabaseAuthGuard } from 'src/auth/supabase-auth/supabase-auth.guard';
+import { RolesGuard } from 'src/auth/guards/roles.guard';
 
 @Controller('notifications')
 export class NotificationController {
@@ -69,13 +82,83 @@ export class NotificationController {
   }
 
   @Get('my')
-  async getUserNotifications(userId: number) {
+  @UseGuards(SupabaseAuthGuard, RolesGuard)
+  async getUserNotifications(@Req() req) {
     return this.notificationRepo
       .createQueryBuilder('n')
       .leftJoin('n.user', 'user')
-      .where('user.id = :userId', { userId })
+      .where('user.id = :userId', { userId: req.user.sub })
       .orderBy('n.id', 'DESC')
       .getMany();
+  }
+
+  @Get()
+  @UseGuards(SupabaseAuthGuard, RolesGuard)
+  async listNotifications(@Req() req, @Query() query: any) {
+    const page = Number(query.page || 1);
+    const limit = Math.min(Number(query.limit || 20), 100);
+
+    const qb = this.notificationRepo
+      .createQueryBuilder('n')
+      .leftJoin('n.user', 'user')
+      .where('user.id = :userId', { userId: req.user.sub });
+
+    if (String(query.unreadOnly) === 'true') {
+      qb.andWhere('n.readAt is null');
+    }
+
+    const [data, total] = await qb
+      .orderBy('n.createdAt', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
+
+    return {
+      success: true,
+      data: data.map((n) => ({
+        id: n.id,
+        type: n.type,
+        title: n.title,
+        body: n.message,
+        data: n.dataJson || {},
+        readAt: n.readAt,
+        createdAt: n.createdAt,
+      })),
+      meta: {
+        page,
+        limit,
+        total,
+        lastPage: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  @Patch(':notificationId/read')
+  @HttpCode(204)
+  @UseGuards(SupabaseAuthGuard, RolesGuard)
+  async markRead(@Req() req, @Param('notificationId') notificationId: number) {
+    const notification = await this.notificationRepo.findOne({
+      where: { id: Number(notificationId), user: { id: req.user.sub } },
+      relations: ['user'],
+    });
+    if (!notification) return;
+    if (!notification.readAt) {
+      notification.readAt = new Date();
+      await this.notificationRepo.save(notification);
+    }
+  }
+
+  @Post('read-all')
+  @HttpCode(204)
+  @UseGuards(SupabaseAuthGuard, RolesGuard)
+  async markAllRead(@Req() req) {
+    await this.notificationRepo
+      .createQueryBuilder()
+      .update(Notification)
+      .set({ readAt: new Date() })
+      .where(`"userId" = :userId`, { userId: req.user.sub })
+      .andWhere(`"readAt" is null`)
+      .execute();
   }
 
   @Get('admin/history')

@@ -19,6 +19,7 @@ import { PaymentsModule } from './payment/payments.module';
 import { PaymentOptionModule } from './payment_option/payment-option.module';
 import { NotificationModule } from './notification/notification.module';
 import { NotificationTemplateModule } from './notification-template/notification-template.module';
+import { CustomerModule } from './customer/customer.module';
 
 @Module({
   imports: [
@@ -47,7 +48,8 @@ import { NotificationTemplateModule } from './notification-template/notification
     PaymentsModule,
     PaymentOptionModule,
     NotificationModule,
-    NotificationTemplateModule
+    NotificationTemplateModule,
+    CustomerModule,
   ],
   controllers: [AppController, SubscriptionController],
   providers: [AppService],

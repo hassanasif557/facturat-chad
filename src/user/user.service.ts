@@ -17,6 +17,7 @@ import { Plan } from 'src/plan/plan.entity';
 import { UserProfileResponse } from './user-profile.response';
 import { NotificationService } from 'src/notification/notification.service';
 import * as bcrypt from 'bcrypt';
+import { DeviceToken } from 'src/customer/entities/device-token.entity';
 
 @Injectable()
 export class UserService {
@@ -29,6 +30,9 @@ export class UserService {
 
     @InjectRepository(Plan)
     private planRepo: Repository<Plan>,
+
+    @InjectRepository(DeviceToken)
+    private deviceTokenRepo: Repository<DeviceToken>,
 
     private notificationService: NotificationService,
   ) {}
@@ -419,18 +423,52 @@ export class UserService {
   }
 
   // ================= NOTIFICATIONS =================
-  async saveFcmToken(user: any, token: string) {
+  async saveFcmToken(
+    user: any,
+    payload: {
+      token: string;
+      deviceId?: string;
+      platform?: string;
+      appVersion?: string;
+    },
+  ) {
     const existing = await this.userRepository.findOne({
       where: { id: user.sub },
     });
 
     if (!existing) throw new NotFoundException('User not found');
 
-    existing.fcmToken = token;
+    existing.fcmToken = payload.token;
 
     await this.userRepository.save(existing);
 
-    return { message: 'Token saved' };
+    if (payload.deviceId) {
+      const device = await this.deviceTokenRepo.findOne({
+        where: {
+          user: { id: user.sub },
+          deviceId: payload.deviceId,
+        },
+        relations: ['user'],
+      });
+      if (device) {
+        device.token = payload.token;
+        device.platform = payload.platform || device.platform;
+        device.appVersion = payload.appVersion || device.appVersion;
+        await this.deviceTokenRepo.save(device);
+      } else {
+        await this.deviceTokenRepo.save(
+          this.deviceTokenRepo.create({
+            user: existing,
+            deviceId: payload.deviceId,
+            token: payload.token,
+            platform: payload.platform || 'android',
+            appVersion: payload.appVersion || undefined,
+          }),
+        );
+      }
+    }
+
+    return { success: true, data: { registered: true } };
   }
 
   // TEST: send push notification to user

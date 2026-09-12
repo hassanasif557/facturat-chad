@@ -1,6 +1,8 @@
 import {
   IsEmail,
+  IsIn,
   IsNotEmpty,
+  IsOptional,
   MinLength,
   Matches,
 } from 'class-validator';
@@ -22,6 +24,10 @@ export class RegisterDto {
   })
   phone!: string;
 
-  @IsNotEmpty()
-  tax_number!: string;
+  @IsOptional()
+  tax_number?: string;
+
+  @IsOptional()
+  @IsIn(['user', 'customer'])
+  role?: 'user' | 'customer';
 }

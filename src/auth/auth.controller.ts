@@ -6,6 +6,7 @@ import {
   UseGuards,
   UploadedFile,
   UseInterceptors,
+  HttpCode,
 } from '@nestjs/common';
 
 import { AuthService } from './auth.service';
@@ -53,13 +54,13 @@ export class AuthController {
   // ================= LOGIN =================
   @Post('login')
   async login(@Body() body: LoginDto) {
-    return this.authService.login(body.phone, body.password);
+    return this.authService.login(body.phone, body.password, body.requestedRole);
   }
 
   // ================= VERIFY OTP =================
   @Post('verify-otp')
   async verifyOtp(@Body() body: VerifyOtpDto) {
-    return this.authService.verifyOtp(body.phone, body.otp);
+    return this.authService.verifyOtp(body.phone, body.otp, body.challengeId, body.device);
   }
 
   // ================= FORGOT PASSWORD =================
@@ -70,15 +71,11 @@ export class AuthController {
 
   // ================= RESET PASSWORD =================
   @Post('reset-password')
-  @UseGuards(SupabaseAuthGuard)
   async resetPassword(
     @Req() req,
     @Body() body: ResetPasswordDto,
   ) {
-    return this.authService.resetPassword(
-      req.user.sub,
-      body.password,
-    );
+    return this.authService.resetPassword(req?.user?.sub, body);
   }
 
   // ================= REFRESH =================
@@ -89,8 +86,9 @@ export class AuthController {
 
   // ================= LOGOUT =================
   @Post('logout')
+  @HttpCode(204)
   @UseGuards(SupabaseAuthGuard)
-  async logout(@Req() req) {
-    return this.authService.logout(req.user.sub);
+  async logout(@Req() req, @Body() body: { refreshToken?: string; deviceId?: string }) {
+    await this.authService.logout(req.user.sub, body?.refreshToken, body?.deviceId);
   }
 }

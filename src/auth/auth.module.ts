@@ -9,6 +9,8 @@ import { User } from 'src/user/user.entity';
 import { Plan } from 'src/plan/plan.entity';
 import { Subscription } from 'src/subscription/subscription.entity';
 import { NotificationModule } from 'src/notification/notification.module';
+import { Invoice } from 'src/invoice/invoice.entity';
+import { DeviceToken } from 'src/customer/entities/device-token.entity';
 
 @Module({
   imports: [
@@ -18,6 +20,8 @@ import { NotificationModule } from 'src/notification/notification.module';
       User,
       Plan,        
       Subscription,
+      Invoice,
+      DeviceToken,
     ]),
     NotificationModule,
 

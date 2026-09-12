@@ -11,6 +11,7 @@ import {
 export enum Role {
   ADMIN = 'admin',
   USER = 'user',
+  CUSTOMER = 'customer',
 }
 
 export enum VerificationStatus {
@@ -43,7 +44,7 @@ export class User {
   @Column({ unique: true })
   phone!: string;
 
-  @Column({ unique: true })
+  @Column({ unique: true, nullable: true })
   tax_number!: string;
 
   // ✅ PROFILE IMAGE
@@ -94,4 +95,30 @@ export class User {
 
   @Column({ default: false })
   otpVerified!: boolean;
+
+  @Column({ nullable: true })
+  otpChallengeId!: string;
+
+  @Column({ nullable: true, unique: true })
+  phoneNormalized!: string;
+
+  @Column({ nullable: true })
+  phoneVerifiedAt!: Date;
+
+  @Column({ nullable: true })
+  emailVerifiedAt!: Date;
+
+  @Column({ default: 'fr' })
+  language!: string;
+
+  @Column({ default: 'active' })
+  accountStatus!: string;
+
+  @Column({ type: 'jsonb', nullable: true })
+  notificationPreferences!: {
+    pushNewInvoice?: boolean;
+    pushDueReminder?: boolean;
+    pushPaymentStatus?: boolean;
+    emailReceipts?: boolean;
+  } | null;
 }

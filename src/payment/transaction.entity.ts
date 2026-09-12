@@ -15,9 +15,13 @@ export enum PaymentType {
 }
 
 export enum TransactionStatus {
+  CREATED = 'created',
   PENDING = 'pending',
   SUCCESS = 'success',
   FAILED = 'failed',
+  EXPIRED = 'expired',
+  CANCELLED = 'cancelled',
+  REFUNDED = 'refunded',
 }
 
 @Entity()
@@ -28,17 +32,29 @@ export class Transaction {
   @Column()
   transactionId!: string; // external or mock TXN id
 
+  @Column({ nullable: true, unique: true })
+  publicReference!: string;
+
   @ManyToOne(() => User)
   user!: User;
 
   @ManyToOne(() => Invoice)
   invoice!: Invoice;
 
+  @ManyToOne(() => User, { nullable: true })
+  customerUser!: User | null;
+
   @Column()
   customerName!: string;
 
   @Column()
   amount!: number;
+
+  @Column('int', { default: 0 })
+  amountInt!: number;
+
+  @Column({ default: 'XAF' })
+  currency!: string;
 
   @Column({ default: 0 })
   commission!: number;
@@ -59,13 +75,31 @@ export class Transaction {
   })
   customerPhone!: string;
 
+  @Column({ nullable: true })
+  customerPhoneNormalized!: string;
+
+  @Column({ nullable: true, unique: true })
+  providerTransactionId!: string;
+
+  @Column({ nullable: true })
+  failureCode!: string;
+
+  @Column({ nullable: true })
+  failureMessage!: string;
+
+  @Column({ nullable: true })
+  idempotencyKey!: string;
+
   @Column({
     type: 'enum',
     enum: TransactionStatus,
-    default: TransactionStatus.PENDING,
+    default: TransactionStatus.CREATED,
   })
   status!: TransactionStatus;
 
   @CreateDateColumn()
   createdAt!: Date;
+
+  @Column({ nullable: true })
+  completedAt!: Date;
 }

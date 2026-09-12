@@ -46,7 +46,6 @@ export class PaymentsService {
   // 🚀 INITIATE PAYMENT
   // ======================================================
   async initiatePayment(user: any, dto: InitiatePaymentDto) {
-    try {
       // ===============================
       // 📄 GET INVOICE
       // ===============================
@@ -215,9 +214,6 @@ export class PaymentsService {
       }
 
       throw new BadRequestException('Invalid payment option');
-    } catch (error) {
-      console.error('❌ Payment initiate error:', error);
-    }
   }
 
   // ======================================================

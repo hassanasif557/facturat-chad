@@ -1,4 +1,4 @@
-import { Matches, MinLength } from 'class-validator';
+import { IsIn, IsOptional, Matches, MinLength } from 'class-validator';
 
 export class LoginDto {
   @Matches(/^\+[1-9]\d{7,14}$/, {
@@ -9,4 +9,8 @@ export class LoginDto {
 
   @MinLength(6)
   password!: string;
+
+  @IsOptional()
+  @IsIn(['user', 'admin', 'customer'])
+  requestedRole?: 'user' | 'admin' | 'customer';
 }

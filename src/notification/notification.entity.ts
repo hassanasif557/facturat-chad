@@ -32,6 +32,12 @@ export class Notification {
   @Column({ nullable: true })
   fcmToken!: string;
 
+  @Column({ type: 'jsonb', nullable: true })
+  dataJson!: Record<string, any> | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  readAt!: Date | null;
+
   @Column({ type: 'enum', enum: NotificationStatus })
   status!: NotificationStatus;
 

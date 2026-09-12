@@ -64,6 +64,8 @@ export class NotificationService {
         user: user ? ({ id: user.id } as User) : undefined,
         event: data?.event,
         type: data?.type,
+        dataJson: data || {},
+        readAt: null,
       });
 
       return { success: true, messageId: response };
@@ -77,6 +79,8 @@ export class NotificationService {
         user: user ? ({ id: user.id } as User) : undefined,
         event: data?.event,
         type: data?.type,
+        dataJson: data || {},
+        readAt: null,
       });
 
       return { success: false, error: error.message };
