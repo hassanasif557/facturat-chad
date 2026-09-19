@@ -20,6 +20,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UpdateVerificationDto } from './dto/update-verification.dto';
 import { UserSearchDto } from './dto/user-search.dto';
+import { LookupCustomerByPhoneDto } from './dto/lookup-customer-by-phone.dto';
 import { UseInterceptors, UploadedFile } from '@nestjs/common';
 
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -72,6 +73,13 @@ export class UserController {
   @Get('search')
   search(@Query() query: UserSearchDto) {
     return this.userService.search(query);
+  }
+
+  @UseGuards(SupabaseAuthGuard, RolesGuard)
+  @Roles('user', 'admin')
+  @Get('customer')
+  findCustomerByPhone(@Query() query: LookupCustomerByPhoneDto) {
+    return this.userService.findCustomerByPhone(query.phone);
   }
 
   @UseGuards(SupabaseAuthGuard, RolesGuard)

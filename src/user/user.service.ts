@@ -5,7 +5,8 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { User, VerificationStatus } from './user.entity';
+import { Role, User, VerificationStatus } from './user.entity';
+import { normalizePhoneE164 } from 'src/common/utils/phone.util';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
@@ -225,6 +226,36 @@ export class UserService {
     }
 
     return this.excludePassword(savedUser) as User;
+  }
+
+  async findCustomerByPhone(phone: string) {
+    const normalizedPhone = normalizePhoneE164(phone);
+    if (!normalizedPhone) {
+      throw new BadRequestException('Phone must use E.164 format');
+    }
+
+    const customer = await this.userRepository.findOne({
+      where: [
+        { phone: normalizedPhone, role: Role.CUSTOMER },
+        { phoneNormalized: normalizedPhone, role: Role.CUSTOMER },
+      ],
+    });
+
+    if (!customer || customer.accountStatus === 'deleted') {
+      throw new NotFoundException('Customer not found');
+    }
+
+    return {
+      success: true,
+      data: {
+        id: customer.id,
+        name: customer.name,
+        phone: customer.phoneNormalized || customer.phone,
+        phoneVerified: !!customer.phoneVerifiedAt,
+        email: customer.email || null,
+        profilePictureUrl: customer.profilePicture || null,
+      },
+    };
   }
 
   // ================= USER SELF =================

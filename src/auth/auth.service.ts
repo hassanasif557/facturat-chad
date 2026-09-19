@@ -143,6 +143,7 @@ export class AuthService {
           phoneMasked: maskPhone(normalizedPhone),
           expiresInSeconds: 300,
           resendAfterSeconds: 60,
+          otp,
         },
       };
     }
@@ -191,6 +192,7 @@ export class AuthService {
           phoneMasked: maskPhone(normalizedPhone),
           expiresInSeconds: 300,
           resendAfterSeconds: 60,
+          otp,
         },
       };
     }
